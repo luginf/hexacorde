@@ -1,10 +1,10 @@
 //: Constantes : grille, directions, noms de notes, gammes (SCALES)
 // ---------- Géométrie ----------
 const S = 90, M = 60, R = 36;           // pas de grille, marge, rayon de l'hexagone
-const N = 6;                            // grille de N x N points
-const SIDE_DIR = [[0,-1],[.866,-.5],[.866,.5],[0,1],[-.866,.5],[-.866,-.5]];
+let N = 6;                              // grille de N x N points (modifiable au clic droit)
+const N_MIN = 3, N_MAX = 12;
 const NAMES = ['do','do#','ré','ré#','mi','fa','fa#','sol','sol#','la','la#','si'];
-const LABELS = 'ABCDEF';
+const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';   // 26 hexagones au plus
 // gammes : demi-tons depuis la tonique. null = chromatique (trait brisé = +1 demi-ton)
 const SCALES = {
   chromatique:  { label: 'Chromatique',          short: 'chr', steps: null },

@@ -5,10 +5,10 @@
 //: Constantes : grille, directions, noms de notes, gammes (SCALES)
 // ---------- Géométrie ----------
 const S = 90, M = 60, R = 36;           // pas de grille, marge, rayon de l'hexagone
-const N = 6;                            // grille de N x N points
-const SIDE_DIR = [[0,-1],[.866,-.5],[.866,.5],[0,1],[-.866,.5],[-.866,-.5]];
+let N = 6;                              // grille de N x N points (modifiable au clic droit)
+const N_MIN = 3, N_MAX = 12;
 const NAMES = ['do','do#','ré','ré#','mi','fa','fa#','sol','sol#','la','la#','si'];
-const LABELS = 'ABCDEF';
+const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';   // 26 hexagones au plus
 // gammes : demi-tons depuis la tonique. null = chromatique (trait brisé = +1 demi-ton)
 const SCALES = {
   chromatique:  { label: 'Chromatique',          short: 'chr', steps: null },
@@ -75,32 +75,40 @@ for (let a = 0; a < 64; a++) {
 const hexLabel = n => `${n}. ${HEX_NAMES[n][0]}, ${HEX_NAMES[n][1]}`;
 
 // ===== src/js/03-geometry.js =====
-//: Géométrie de l'hexagone et de la grille (mod6, px, vertex, sideEnds, sideMid)
-const mod6 = n => ((n % 6) + 6) % 6;
+//: Géométrie du polygone (6 ou 7 côtés) et de la grille (modn, px, vertexAt, sideEnds, sideMid, sideAng)
+const modn = (a, n) => ((a % n) + n) % n;
 const px = g => M + g * S;
-const vertex = i => { const a = i * Math.PI / 3; return [R * Math.cos(a), R * Math.sin(a)]; };
-// côté k (0 = haut, sens horaire) relie les sommets 4+k et 5+k
-const sideEnds = k => [vertex((4 + k) % 6), vertex((5 + k) % 6)];
-const sideMid = k => { const a = (270 + 60 * k) * Math.PI / 180; return [Math.cos(a), Math.sin(a)]; };
+const vertexAt = deg => { const a = deg * Math.PI / 180; return [R * Math.cos(a), R * Math.sin(a)]; };
+// côté k d'un polygone à n côtés : le côté 0 est en haut, puis sens horaire ; angle en degrés depuis le haut
+const sideAng = (k, n) => 360 * k / n;
+const sideEnds = (k, n) => [vertexAt(270 + sideAng(k, n) - 180 / n), vertexAt(270 + sideAng(k, n) + 180 / n)];
+const sideMid = (k, n) => { const a = (270 + sideAng(k, n)) * Math.PI / 180; return [Math.cos(a), Math.sin(a)]; };
 
 // ===== src/js/04-state.js =====
-//: État global : les 6 hexagrammes (slots), impulsions, horloge, options
+//: État global : les hexagrammes (slots, de 0 à 26), impulsions, horloge, options, impulsions, horloge, options
 // ---------- État ----------
 const bits = s => s.split('').map(Number);
-const slots = [
-  { gx: 0, gy: 2, lines: bits('111111') },
-  { gx: 2, gy: 0, lines: bits('101010') },
-  { gx: 4, gy: 1, lines: bits('111000') },
-  { gx: 5, gy: 3, lines: bits('010101') },
-  { gx: 3, gy: 4, lines: bits('000111') },
-  { gx: 1, gy: 4, lines: bits('100110') },
-].map((s, i) => Object.assign(s, {
-  id: i, mode: 'chromatique', channel: i,
-  initial: s.lines.slice(),                  // forme de départ, pour la réinitialisation
-  custom: Array.from({ length: 6 }, (_, k) => ({ p: 2 * k, b: 2 * k + 1 })), customOn: false,  // notes personnalisées
-  rot: 0, rotOn: false, rotDir: 1, rotSpeed: 1, rotAcc: 0, rotDelta: 0, rotT0: -1e9, rotDur: 1,
-  ph: null, flash: [-99,-99,-99,-99,-99,-99],
-}));
+const slots = [];
+let slotSeq = 0;
+// crée les données d'un hexagone (c : gx, gy, lines, et en option label, initial, mode, channel, active,
+// custom, customOn, rot, rotOn, rotDir, rotSpeed). La lettre est la première libre.
+function makeSlot(c) {
+  const free = LABELS.split('').find(l => !slots.some(s => s.label === l));
+  const label = c.label && !slots.some(s => s.label === c.label) ? c.label : free;
+  const s = {
+    id: slotSeq++, label, gx: c.gx, gy: c.gy, lines: c.lines.slice(), n: c.lines.length,   // n = 6 ou 7 côtés
+    initial: (c.initial || c.lines).slice(),     // forme de départ, pour la réinitialisation
+    mode: c.mode || 'chromatique', channel: c.channel === undefined ? LABELS.indexOf(label) % 16 : c.channel,
+    active: c.active !== false,                  // inactif : grisé, ne joue pas, ne reçoit rien
+    loopOn: !!c.loopOn, loopN: c.loopN || 24,    // amorce d'une note tous les loopN pas
+    customOn: !!c.customOn,                      // notes personnalisées
+    rot: c.rot || 0, rotOn: !!c.rotOn, rotDir: c.rotDir || 1, rotSpeed: c.rotSpeed || 1,
+    rotAcc: 0, rotDelta: 0, rotT0: -1e9, rotDur: 1,
+    ph: null, flash: Array(c.lines.length).fill(-99),
+  };
+  if (c.custom) s.custom = c.custom; else fillCustom(s);
+  return s;
+}
 
 let pulses = [];
 let tick = 0, running = false, tickMs = 240;
@@ -109,7 +117,7 @@ let timer = null, nextAt = 0;
 const MAX_PULSES = 300;
 
 const opt = {
-  softRange: 2.5, mutate: false, loop: false, loopN: 24, tonic: 0,
+  softRange: 2.5, mutate: false, tonic: 0, octave: 0,
 };
 
 // ===== src/js/05-simulation.js =====
@@ -118,63 +126,81 @@ const opt = {
 const pcOf = (k, line) => 2 * k + (line ? 0 : 1);
 // décalage en demi-tons depuis la tonique pour le côté k, ou null si le côté est muet
 // note par défaut du trait k selon la gamme (line = 1 plein, 0 brisé)
-function defaultOffset(slot, k, line) {
+// Heptagone : une gamme pentatonique est complétée par les 2 notes de la gamme à 7 notes de même couleur
+// (majeur pour la pentatonique majeure, mineur naturel pour la mineure), au lieu de répéter des octaves.
+const HEPTA = { pentamajeur: 'majeur', pentamineur: 'mineur' };
+function scaleSteps(slot) {
   const steps = SCALES[slot.mode].steps;
+  if (!steps || slot.n < 7 || steps.length >= 7 || !HEPTA[slot.mode]) return steps;
+  return [...steps, ...SCALES[HEPTA[slot.mode]].steps.filter(x => !steps.includes(x))];
+}
+function defaultOffset(slot, k, line) {
+  const steps = scaleSteps(slot);
   if (!steps) return pcOf(k, line);
   if (!line) return null;                       // gamme : trait brisé = pas de note, pas de renvoi
   return steps[k % steps.length] + 12 * Math.floor(k / steps.length);
 }
 // notes personnalisées : plein et brisé de chaque trait, de 0 à 23 demi-tons au-dessus de la tonique
 // (null pour le brisé = silence)
+// Gamme de plus de n notes : les notes qui n'ont pas de trait plein sont mises sur les premiers traits brisés,
+// pour que toute la gamme soit présente (un brisé ne sonne que s'il est touché par une impulsion).
 function fillCustom(slot) {
-  slot.custom = [0, 1, 2, 3, 4, 5].map(k => ({ p: defaultOffset(slot, k, 1), b: defaultOffset(slot, k, 0) }));
+  const n = slot.n;
+  slot.custom = Array.from({ length: n }, (_, k) => ({ p: defaultOffset(slot, k, 1), b: defaultOffset(slot, k, 0) }));
+  const steps = SCALES[slot.mode].steps;
+  for (let j = n; steps && j < steps.length; j++) slot.custom[j - n].b = steps[j];
 }
+// numéro d'hexagramme : les 6 premiers traits (le 7e côté, optionnel, n'en fait pas partie)
+const hexOf = slot => hexNumber(slot.lines.slice(0, 6));
 function offsetOf(slot, k) {
   const line = slot.lines[k];
   if (slot.customOn) return line ? slot.custom[k].p : slot.custom[k].b;
   return defaultOffset(slot, k, line);
 }
-const midiOf = (slot, off) => 48 + 12 * Math.floor((N - 1 - slot.gy) / 2) + opt.tonic + off;
+const midiOf = (slot, off) => Math.max(0, Math.min(127, 48 + 12 * (Math.floor((5 - slot.gy) / 2) + opt.octave) + opt.tonic + off));
 
-// secteur (0..5) dans lequel se trouve "to" vu depuis "from" ; demi-ouvert [k*60-30, k*60+30)
-function sectorOf(from, to) {
-  const cw = Math.atan2(to.gx - from.gx, -(to.gy - from.gy)) * 180 / Math.PI;
-  return Math.floor(((cw + 30 + 1e-6 + 720) % 360) / 60) % 6;
+// "to" est-il dans le secteur de `from` centré sur la direction ang (degrés depuis le haut, sens horaire) ?
+// secteur demi-ouvert de largeur 360 / n, donc l'horizontale exacte d'un hexagone va au secteur du bas
+function inSector(from, to, ang) {
+  const cw = Math.atan2(to.gx - from.gx, -(to.gy - from.gy)) * 180 / Math.PI, w = 180 / from.n;
+  return ((cw - ang + w + 1e-6 + 1080) % 360) < 2 * w;
 }
 
-function findTarget(from, k) {
+function findTarget(from, ang) {
   let best = null, bd = Infinity;
   for (const o of slots) {
-    if (o === from) continue;
-    if (sectorOf(from, o) !== k) continue;
+    if (o === from || !o.active) continue;
+    if (!inSector(from, o, ang)) continue;
     const d = Math.hypot(o.gx - from.gx, o.gy - from.gy);
     if (d < bd) { bd = d; best = o; }
   }
   return best ? { slot: best, dist: bd } : null;
 }
 
-function emit(from, k, strong, range) {
+// émet une impulsion dans la direction ang (degrés depuis le haut, sens horaire)
+function emit(from, ang, strong, range) {
   if (pulses.length >= MAX_PULSES) return;
-  const hit = findTarget(from, k);
+  const hit = findTarget(from, ang), r = ang * Math.PI / 180;
   const x0 = from.gx, y0 = from.gy;
   if (!hit || hit.dist > range + 1e-9) {
     // impulsion perdue : petite étincelle qui s'éteint
-    pulses.push({ x0, y0, x1: x0 + SIDE_DIR[k][0] * .6, y1: y0 + SIDE_DIR[k][1] * .6,
-                  t0: tick, t1: tick + 1, target: null, k, strong, range });
+    pulses.push({ x0, y0, x1: x0 + Math.sin(r) * .6, y1: y0 - Math.cos(r) * .6,
+                  t0: tick, t1: tick + 1, target: null, ang, strong, range });
     return;
   }
   pulses.push({ x0, y0, x1: hit.slot.gx, y1: hit.slot.gy,
                 t0: tick, t1: tick + Math.max(1, Math.ceil(hit.dist - 1e-9)),
-                target: hit.slot, k, strong, range: range - hit.dist });
+                target: hit.slot, ang, strong, range: range - hit.dist });
 }
 
 function receive(p) {
-  // côté physique touché s ; le trait qui s'y trouve est li (l'hexagone peut avoir tourné)
-  const slot = p.target, s = (p.k + 3) % 6, li = mod6(s - slot.rot), line = slot.lines[li];
+  // côté physique touché s (celui qui regarde l'émetteur) ; le trait qui s'y trouve est li (le polygone peut avoir tourné)
+  const slot = p.target, n = slot.n, s = Math.round(modn(p.ang + 180, 360) / (360 / n)) % n;
+  const li = modn(s - slot.rot, n), line = slot.lines[li];
   if (line === 1) {
-    slot.ph = { side: li, left: 6 };      // trait plein : rebond
+    slot.ph = { side: li, left: n };      // trait plein : rebond
   } else {
-    emit(slot, p.k, p.strong, p.range);   // trait brisé : traversée
+    emit(slot, p.ang, p.strong, p.range); // trait brisé : traversée
   }
   if (opt.mutate && (p.strong ? 1 : 0) !== line) {
     slot.lines[li] ^= 1;
@@ -186,14 +212,15 @@ function step() {
   tick++;
   lastTickAt = performance.now();
 
-  if (opt.loop && tick % opt.loopN === 1) slots[0].ph = { side: 0, left: 6 };
+  // amorce périodique, par hexagone : relance le côté 0 tous les loopN pas
+  for (const s of slots) if (s.active && s.loopOn && tick % s.loopN === 1) s.ph = { side: 0, left: s.n };
 
   const arriving = pulses.filter(p => p.t1 <= tick);
   pulses = pulses.filter(p => p.t1 > tick);
-  for (const p of arriving) if (p.target) receive(p);
+  for (const p of arriving) if (p.target && p.target.active) receive(p);
 
   for (const slot of slots) {
-    if (!slot.ph) continue;
+    if (!slot.ph || !slot.active) continue;
     const k = slot.ph.side, line = slot.lines[k], off = offsetOf(slot, k);
     if (off !== null) {
       const midi = midiOf(slot, off);
@@ -201,9 +228,9 @@ function step() {
       midiNote(slot, midi, line ? 96 : 56);
       recNote(slot, midi, line ? 96 : 56);
       slot.flash[k] = tick;
-      emit(slot, mod6(k + slot.rot), line === 1, line ? Infinity : opt.softRange);
+      emit(slot, sideAng(modn(k + slot.rot, slot.n), slot.n), line === 1, line ? Infinity : opt.softRange);
     }
-    slot.ph.side = (k + 1) % 6;
+    slot.ph.side = (k + 1) % slot.n;
     if (--slot.ph.left <= 0) slot.ph = null;
   }
 
@@ -232,7 +259,7 @@ function resetSlot(slot) {
   slot.lines = slot.initial.slice();
   slot.rot = 0; slot.rotAcc = 0; slot.rotDelta = 0; slot.rotT0 = -1e9;
   slot.ph = null;
-  slot.flash = [-99, -99, -99, -99, -99, -99];
+  slot.flash = Array(slot.n).fill(-99);
   pulses = pulses.filter(p => p.target !== slot);
   midiPanic();
   drawSlot(slot);
@@ -240,7 +267,7 @@ function resetSlot(slot) {
 
 // définit un hexagramme par son numéro (devient aussi sa forme de départ)
 function setHexagram(slot, n) {
-  slot.lines = HEX_LINES[n].slice();
+  slot.lines.splice(0, 6, ...HEX_LINES[n]);      // un éventuel 7e côté est conservé
   slot.initial = slot.lines.slice();
   drawSlot(slot);
 }
@@ -261,13 +288,12 @@ function start() {
   if (running) return;
   running = true; nextAt = performance.now();
   $play.textContent = 'Pause'; $play.classList.add('on');
-  if ($rec.checked) beginRecording();
+  if (arec) arec.started = true;            // l'audio commence au premier Jouer
   schedule();
 }
 function stop() {
   running = false; clearTimeout(timer);
   $play.textContent = 'Jouer'; $play.classList.remove('on');
-  finishRecording();
   midiPanic();
 }
 function silence() {
@@ -285,13 +311,13 @@ const PPQ = 480, STEP_TICKS = PPQ / 2, NOTE_TICKS = Math.round(STEP_TICKS * 0.9)
 let rec = null;
 
 function beginRecording() {
-  rec = { events: [], tempos: [{ step: tick, ms: tickMs }] };
+  rec = { events: [], tempos: [{ step: tick, ms: tickMs }], live: true };
 }
 function recNote(slot, midi, vel) {
-  if (rec) rec.events.push({ step: tick, slot: slot.id, ch: slot.channel, midi, vel });
+  if (rec && rec.live) rec.events.push({ step: tick, slot: slot.id, ch: slot.channel, midi, vel });
 }
 function recTempo() {
-  if (rec) rec.tempos.push({ step: tick, ms: tickMs });
+  if (rec && rec.live) rec.tempos.push({ step: tick, ms: tickMs });
 }
 
 const vlq = n => { const b = [n & 0x7f]; while ((n >>= 7) > 0) b.unshift((n & 0x7f) | 0x80); return b; };
@@ -326,7 +352,7 @@ function buildMidi(r) {
   for (const slot of slots) {
     const mine = r.events.filter(e => e.slot === slot.id);
     if (!mine.length) continue;
-    const ev = [{ t: 0, order: 0, bytes: metaText(0x03, `Hexacorde ${LABELS[slot.id]} ${slot.mode}`) }];
+    const ev = [{ t: 0, order: 0, bytes: metaText(0x03, `Hexacorde ${slot.label} ${slot.mode}`) }];
     for (const e of mine) {
       const t = (e.step - base) * STEP_TICKS;
       ev.push({ t, order: 1, bytes: [0x90 | e.ch, e.midi, e.vel] });
@@ -346,14 +372,20 @@ function download(bytes, filename, mime = 'audio/midi') {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+// horodatage pour les noms de fichier : AAAAMMJJ-HHMMSS
+function fileStamp() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+const fileBase = () => ($recName.value.trim() || 'hexacorde').replace(/[^\p{L}\p{N}_. -]+/gu, '_');
+
+// arrête l'enregistrement MIDI et télécharge le fichier ; renvoie false s'il n'y avait aucune note
 function finishRecording() {
   const r = rec;
+  if (!r || !r.events.length) return false;
   rec = null;
-  if (!r || !r.events.length) return;
-  const d = new Date(), p = n => String(n).padStart(2, '0');
-  const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-  const name = ($recName.value.trim() || 'hexacorde').replace(/[^\p{L}\p{N}_. -]+/gu, '_');
-  download(buildMidi(r), `${name}-${stamp}.mid`);
+  download(buildMidi(r), `${fileBase()}-${fileStamp()}.mid`);
+  return true;
 }
 
 // ===== src/js/08-midi-out.js =====
@@ -435,17 +467,29 @@ const el = (name, attrs = {}, parent) => {
   return e;
 };
 
-// points de la grille
+// points de la grille ; la taille du plateau suit N
 const gridLayer = el('g', {}, svg);
-for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
-  el('circle', { cx: px(x), cy: px(y), r: 2.5, fill: 'var(--grid)' }, gridLayer);
+function drawGrid() {
+  const W = 2 * M + (N - 1) * S;
+  svg.setAttribute('viewBox', `0 0 ${W} ${W}`);
+  svg.setAttribute('aria-label', `Grille ${N}x${N} d'hexagrammes`);
+  while (gridLayer.firstChild) gridLayer.removeChild(gridLayer.firstChild);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
+    el('circle', { cx: px(x), cy: px(y), r: 2.5, fill: 'var(--grid)' }, gridLayer);
+}
+drawGrid();
 const slotLayer = el('g', {}, svg);
 const pulseLayer = el('g', { 'pointer-events': 'none' }, svg);
 
-for (const slot of slots) {
+// crée le groupe SVG d'un hexagone (appelé à la création de l'hexagone)
+function buildSlotView(slot) {
   slot.g = el('g', { cursor: 'grab' }, slotLayer);
   // clic droit : menu (rotation, notes). Molette : bas = rotation horaire, haut = antihoraire
-  slot.g.addEventListener('contextmenu', e => { e.preventDefault(); openMenu(slot, e.clientX, e.clientY); });
+  slot.g.addEventListener('contextmenu', e => {
+    e.preventDefault(); e.stopPropagation();
+    if (slot.sel && slots.filter(s => s.sel).length > 1) openSelMenu(e.clientX, e.clientY);   // sélection multiple
+    else openMenu(slot, e.clientX, e.clientY);
+  });
   let lastWheel = 0;
   slot.g.addEventListener('wheel', e => {
     e.preventDefault();
@@ -458,31 +502,33 @@ for (const slot of slots) {
 
 function drawSlot(slot) {
   const g = slot.g;
+  g.setAttribute('opacity', slot.active ? 1 : 0.3);      // inactif : grisé
   while (g.firstChild) g.removeChild(g.firstChild);
   g.setAttribute('transform', `translate(${px(slot.gx)},${px(slot.gy)})`);
 
-  const pts = [0,1,2,3,4,5].map(i => vertex(i).join(',')).join(' ');
-  const body = el('polygon', { points: pts, fill: '#1c1c22', stroke: '#2a2a33', 'stroke-width': 1 }, g);
+  const n = slot.n;
+  const pts = Array.from({ length: n }, (_, k) => vertexAt(270 + sideAng(k, n) - 180 / n).join(',')).join(' ');
+  const body = el('polygon', { points: pts, fill: '#1c1c22', stroke: slot.sel ? 'var(--yang)' : '#2a2a33', 'stroke-width': slot.sel ? 2.5 : 1 }, g);
   body.addEventListener('pointerdown', e => beginDrag(e, slot));
 
   el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
                'font-size': 15, fill: '#4a4a56', 'font-weight': 700, 'pointer-events': 'none' }, g)
-    .textContent = LABELS[slot.id];
+    .textContent = slot.label;
   el('text', { x: 0, y: 13, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
                'font-size': 7, fill: '#4a4a56', 'pointer-events': 'none' }, g)
     .textContent = SCALES[slot.mode].short;
 
   // numéro et nom de l'hexagramme sous l'hexagone
-  const hn = hexNumber(slot.lines);
+  const hn = hexOf(slot);
   el('text', { x: 0, y: R + 11, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
                'font-size': 8.5, fill: 'var(--dim)', 'pointer-events': 'none' }, g)
-    .textContent = `${hn} ${HEX_NAMES[hn][0]}`;
+    .textContent = `${hn} ${HEX_NAMES[hn][0]}${n === 7 ? ' +1' : ''}`;
   if (slot.hexSel) slot.hexSel.value = hn;
 
   slot.sideEls = []; slot.labelEls = [];
   slot.rotG = el('g', {}, g);               // traits : tournent avec l'hexagone
-  for (let k = 0; k < 6; k++) {
-    const [a, b] = sideEnds(k);
+  for (let k = 0; k < n; k++) {
+    const [a, b] = sideEnds(k, n);
     const inset = 0.12;
     const lerp = (u, v, t) => [u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t];
     const segs = slot.lines[k]
@@ -498,11 +544,15 @@ function drawSlot(slot) {
       x1: a[0], y1: a[1], x2: b[0], y2: b[1],
       stroke: 'transparent', 'stroke-width': 14, cursor: 'pointer',
     }, sg);
-    hit.addEventListener('pointerdown', e => e.stopPropagation());
-    hit.addEventListener('click', () => { slot.lines[k] ^= 1; drawSlot(slot); });
+    // glisser sur un trait fait tourner l'hexagone ; un simple clic bascule le trait
+    hit.addEventListener('pointerdown', e => { e.stopPropagation(); beginSpin(e, slot); });
+    hit.addEventListener('click', () => {
+      if (slot.noClick) return;
+      slot.lines[k] ^= 1; drawSlot(slot);
+    });
     slot.sideEls.push(els);
 
-    const m = sideMid(k);
+    const m = sideMid(k, n);
     const t = el('text', {
       x: m[0] * R * 0.58, y: m[1] * R * 0.58,
       'text-anchor': 'middle', 'dominant-baseline': 'middle',
@@ -512,14 +562,14 @@ function drawSlot(slot) {
     t.textContent = off === null ? '·' : NAMES[(opt.tonic + off) % 12] + (off >= 12 ? "'" : '');
     slot.labelEls.push(t);
   }
-  applyRotation(slot, 60 * slot.rot);
+  applyRotation(slot, 360 / n * slot.rot);
 }
 
 // fait tourner les traits de deg degrés ; les étiquettes suivent mais restent droites
 function applyRotation(slot, deg) {
   slot.rotG.setAttribute('transform', `rotate(${deg})`);
-  for (let k = 0; k < 6; k++) {
-    const a = (270 + 60 * k + deg) * Math.PI / 180;
+  for (let k = 0; k < slot.n; k++) {
+    const a = (270 + sideAng(k, slot.n) + deg) * Math.PI / 180;
     slot.labelEls[k].setAttribute('x', Math.cos(a) * R * 0.58);
     slot.labelEls[k].setAttribute('y', Math.sin(a) * R * 0.58);
   }
@@ -567,10 +617,80 @@ function onUp(e) {
     if (!slots.some(o => o !== slot && o.gx === gx && o.gy === gy)) { slot.gx = gx; slot.gy = gy; }
     drawSlot(slot);
   } else if (!moved) {
-    slot.ph = { side: 0, left: 6 };
+    if (!slot.active) return;
+    slot.ph = { side: 0, left: slot.n };
     start();
   }
 }
+
+// rotation à la souris : on saisit un trait et on tourne autour du centre de l'hexagone,
+// un cran (360 / n degrés) chaque fois que le pointeur a parcouru un cran (dans un sens ou dans l'autre)
+function beginSpin(e, slot) {
+  if (e.button !== 0) return;
+  const r = slot.g.querySelector('polygon').getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const ang = ev => Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI;
+  const sx = e.clientX, sy = e.clientY;
+  let prev = ang(e), total = 0, applied = 0, moved = false;
+  const move = ev => {
+    if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+    moved = true;
+    let d = ang(ev) - prev;
+    if (d > 180) d -= 360; else if (d < -180) d += 360;
+    prev = ang(ev); total += d;
+    const n = Math.round(total / (360 / slot.n));
+    if (n !== applied) { rotateBy(slot, n - applied); applied = n; }
+  };
+  const up = () => {
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', up);
+    removeEventListener('pointercancel', up);
+    if (moved) { slot.noClick = true; setTimeout(() => { slot.noClick = false; }, 60); }   // pas de basculement du trait
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', up);
+  addEventListener('pointercancel', up);
+}
+
+// sélection multiple : on tire un rectangle sur le fond de la grille (Maj : ajoute à la sélection) ;
+// un clic sur le fond désélectionne. Clic droit sur la sélection : menu (supprimer, désactiver...).
+const selLayer = el('g', { 'pointer-events': 'none' }, svg);
+const selected = () => slots.filter(s => s.sel);
+function setSel(slot, on) { if (!!slot.sel !== on) { slot.sel = on; drawSlot(slot); } }
+function clearSel() { slots.forEach(s => setSel(s, false)); }
+svg.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || slotLayer.contains(e.target)) return;
+  const p0 = svgPoint(e), sx = e.clientX, sy = e.clientY, add = e.shiftKey;
+  let rect = null;
+  const move = ev => {
+    if (!rect && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+    const p = svgPoint(ev);
+    if (!rect) rect = el('rect', { fill: 'var(--yang)', 'fill-opacity': 0.08, stroke: 'var(--yang)', 'stroke-dasharray': '4 3' }, selLayer);
+    rect.setAttribute('x', Math.min(p0.x, p.x)); rect.setAttribute('y', Math.min(p0.y, p.y));
+    rect.setAttribute('width', Math.abs(p.x - p0.x)); rect.setAttribute('height', Math.abs(p.y - p0.y));
+  };
+  const up = ev => {
+    removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+    if (rect) {
+      const p = svgPoint(ev), x0 = Math.min(p0.x, p.x), x1 = Math.max(p0.x, p.x), y0 = Math.min(p0.y, p.y), y1 = Math.max(p0.y, p.y);
+      rect.remove();
+      for (const s of slots) {
+        const inside = px(s.gx) >= x0 && px(s.gx) <= x1 && px(s.gy) >= y0 && px(s.gy) <= y1;
+        if (inside) setSel(s, true); else if (!add) setSel(s, false);
+      }
+    } else if (!add) clearSel();
+  };
+  addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+});
+function deleteSelected() {
+  for (const s of selected()) removeSlot(s, true);
+  midiPanic(); closeMenu();
+}
+document.addEventListener('keydown', e => {
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName)) return;
+  if (e.key === 'Delete' && selected().length) deleteSelected();
+  if (e.key === 'Escape') clearSel();
+});
 
 // ===== src/js/12-frame.js =====
 //: Animation : impulsions, éclats, rotation animée, état affiché
@@ -596,8 +716,8 @@ function frame(now) {
   for (const slot of slots) {
     // rotation animée (un pas d'horloge pour la rotation auto, 160 ms pour la manuelle)
     const u = Math.min(1, Math.max(0, (now - slot.rotT0) / slot.rotDur));
-    applyRotation(slot, 60 * (slot.rot - slot.rotDelta * (1 - u * u * (3 - 2 * u))));
-    for (let k = 0; k < 6; k++) {
+    applyRotation(slot, 360 / slot.n * (slot.rot - slot.rotDelta * (1 - u * u * (3 - 2 * u))));
+    for (let k = 0; k < slot.n; k++) {
       const f = Math.max(0, 1 - (tf - slot.flash[k]) / 2.5);
       const color = f > 0 ? (slot.lines[k] ? 'var(--yang)' : 'var(--yin)') : 'var(--ink)';
       for (const l of slot.sideEls[k]) {
@@ -609,7 +729,10 @@ function frame(now) {
     }
   }
   $status.textContent = `pas ${tick} · impulsions ${pulses.length}` +
-    (rec ? ` · REC ${rec.events.length} notes` : '');
+    (rec ? ` · MIDI ${rec.events.length} notes${rec.live ? '' : ' (arrêté)'}` : '') +
+    (arec ? ` · audio ${(arec.n / ac.sampleRate).toFixed(1)} s${arec.live ? '' : ' (arrêté)'}` : '');
+  $recSave.disabled = !(rec && rec.events.length);
+  $arecSave.disabled = !(arec && arec.n);
   requestAnimationFrame(frame);
 }
 
@@ -619,6 +742,7 @@ function frame(now) {
 const $ = id => document.getElementById(id);
 const $play = $('play'), $vol = $('vol'), $status = $('status');
 const $rec = $('rec'), $recName = $('recName'), $internal = $('internal');
+const $recSave = $('recSave'), $arecSave = $('arecSave');
 
 $play.addEventListener('click', () => running ? stop() : start());
 $('silence').addEventListener('click', silence);
@@ -627,20 +751,17 @@ $('tempo').addEventListener('input', e => {
   $('tempoVal').textContent = tickMs + ' ms';
   recTempo();
 });
-$rec.addEventListener('change', () => {
-  if ($rec.checked) { if (running) beginRecording(); }
-  else finishRecording();
-});
 $vol.addEventListener('input', e => { if (master) master.gain.value = +e.target.value; });
 $('soft').addEventListener('input', e => { opt.softRange = Math.max(1, +e.target.value || 1); });
 $('mutate').addEventListener('change', e => { opt.mutate = e.target.checked; });
-$('loop').addEventListener('change', e => { opt.loop = e.target.checked; });
-$('loopN').addEventListener('input', e => { opt.loopN = Math.max(2, +e.target.value || 24); });
 
 // tonique et gamme par hexagone
 const scaleOptions = () => Object.entries(SCALES)
   .map(([key, v]) => `<option value="${key}">${v.label}</option>`).join('');
 $('tonic').innerHTML = NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+$('octave').innerHTML = [-3, -2, -1, 0, 1, 2, 3].map(o => `<option value="${o}">${o > 0 ? '+' + o : o}</option>`).join('');
+$('octave').value = 0;
+$('octave').addEventListener('change', e => { opt.octave = +e.target.value; });
 $('tonic').addEventListener('change', e => {
   opt.tonic = +e.target.value;
   slots.forEach(drawSlot);
@@ -665,12 +786,43 @@ function setRotOn(slot, on) { slot.rotOn = on; slot.rotChk.checked = on; }
 function setRotDir(slot, dir) { slot.rotDir = dir; slot.dirBtn.textContent = dir > 0 ? '↻' : '↺'; }
 function setRotSpeed(slot, v) { slot.rotSpeed = v; slot.rotAcc = 0; slot.spdSel.value = v; }
 
-for (const slot of slots) {
-  const box = document.createElement('div');
+function setActive(slot, on) {
+  slot.active = on; slot.actChk.checked = on;
+  if (!on) { slot.ph = null; pulses = pulses.filter(p => p.target !== slot); midiPanic(); }
+  drawSlot(slot);
+}
+// 6 ou 7 côtés : le 7e est un trait plein de plus, avec la note suivante de la gamme ;
+// la rotation repart de 0 (le cran n'a plus la même valeur) et les impulsions vers lui sont perdues
+function setSides(slot, n) {
+  slot.sevChk.checked = n === 7;
+  if (n === slot.n) return;
+  // notes encore celles de la gamme (jamais modifiées à la main) : on les redistribue pour le nouveau nombre de côtés
+  const before = JSON.stringify(slot.custom);
+  fillCustom(slot);
+  const pristine = JSON.stringify(slot.custom) === before;
+  slot.custom = JSON.parse(before);
+  if (n === 7) { slot.lines.push(1); slot.initial.push(1); slot.n = 7; slot.custom.push({ p: defaultOffset(slot, 6, 1), b: defaultOffset(slot, 6, 0) }); }
+  else { slot.lines.length = 6; slot.initial.length = 6; slot.custom.length = 6; slot.n = 6; }
+  if (pristine) fillCustom(slot);
+  slot.rot = 0; slot.rotAcc = 0; slot.rotDelta = 0; slot.rotT0 = -1e9;
+  slot.ph = null; slot.flash = Array(slot.n).fill(-99);
+  pulses = pulses.filter(p => p.target !== slot);
+  drawSlot(slot);
+}
+function setLoop(slot, on, n) {
+  slot.loopOn = on; slot.loopN = Math.max(2, Math.min(128, Math.round(n) || 24));
+  slot.loopChk.checked = on; slot.loopNum.value = slot.loopN;
+}
+
+// bloc de réglages d'un hexagone dans le panneau
+function buildSlotPanel(slot) {
+  const box = slot.box = document.createElement('div');
   box.className = 'slotctl';
   box.innerHTML = `
-    <div class="row"><span>${LABELS[slot.id]}</span>
-      <select class="hex" title="Hexagramme">${hexOptions}</select></div>
+    <div class="row"><span>${slot.label}</span>
+      <select class="hex" title="Hexagramme">${hexOptions}</select>
+      <label title="Actif : décocher pour griser l'hexagone"><input class="act" type="checkbox"></label>
+      <button class="del" title="Supprimer cet hexagone">✕</button></div>
     <div class="row"><span></span>
       <select class="scale" title="Gamme">${scaleOptions()}</select>
       <select class="chan" title="Canal MIDI">${chanOptions}</select></div>
@@ -679,11 +831,21 @@ for (const slot of slots) {
       <button class="dir" title="Sens de rotation">↻</button>
       <select class="spd" title="Vitesse de rotation">${SPEEDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
       <button class="reset" title="Remettre cet hexagramme à sa forme de départ">Réinit.</button>
+    </div>
+    <div class="row rot">
+      <label title="Amorcer une note de cet hexagone tous les N pas"><input class="loopOn" type="checkbox"> amorce tous les
+        <input class="loopN" type="number" min="2" max="128"> pas</label></div>
+    <div class="row rot">
+      <label title="Ajoute un 7e côté : l'hexagone devient un heptagone"><input class="sev" type="checkbox"> 7e côté</label>
     </div>`;
   const q = s => box.querySelector(s);
   slot.hexSel = q('.hex');
-  slot.hexSel.value = hexNumber(slot.lines);
+  slot.hexSel.value = hexOf(slot);
   slot.hexSel.addEventListener('change', () => setHexagram(slot, +slot.hexSel.value));
+
+  slot.actChk = q('.act'); slot.actChk.checked = slot.active;
+  slot.actChk.addEventListener('change', () => setActive(slot, slot.actChk.checked));
+  q('.del').addEventListener('click', () => removeSlot(slot));
 
   slot.modeSel = q('.scale');
   slot.modeSel.value = slot.mode;
@@ -693,16 +855,66 @@ for (const slot of slots) {
   slot.chanSel.value = slot.channel;
   slot.chanSel.addEventListener('change', e => setChannel(slot, +e.target.value));
 
-  slot.rotChk = q('.rotOn');
+  slot.rotChk = q('.rotOn'); slot.rotChk.checked = slot.rotOn;
   slot.rotChk.addEventListener('change', () => setRotOn(slot, slot.rotChk.checked));
   const dir = slot.dirBtn = q('.dir');
+  dir.textContent = slot.rotDir > 0 ? '↻' : '↺';
   dir.addEventListener('click', () => setRotDir(slot, -slot.rotDir));
   slot.spdSel = q('.spd');
   slot.spdSel.value = slot.rotSpeed;
   slot.spdSel.addEventListener('change', e => setRotSpeed(slot, +e.target.value));
   q('.reset').addEventListener('click', () => resetSlot(slot));
+
+  slot.sevChk = q('.sev'); slot.sevChk.checked = slot.n === 7;
+  slot.sevChk.addEventListener('change', () => setSides(slot, slot.sevChk.checked ? 7 : 6));
+  slot.loopChk = q('.loopOn'); slot.loopNum = q('.loopN');
+  slot.loopChk.checked = slot.loopOn; slot.loopNum.value = slot.loopN;
+  slot.loopChk.addEventListener('change', () => setLoop(slot, slot.loopChk.checked, slot.loopNum.value));
+  slot.loopNum.addEventListener('input', () => { slot.loopN = Math.max(2, +slot.loopNum.value || 24); });
   modesBox.appendChild(box);
 }
+
+// ajoute un hexagone (données, dessin sur la grille, bloc du panneau) ; c : voir makeSlot
+function addSlot(c) {
+  const slot = makeSlot(c);
+  slots.push(slot);
+  buildSlotView(slot);
+  buildSlotPanel(slot);
+  drawSlot(slot);
+  return slot;
+}
+function removeSlot(slot, quiet) {
+  const i = slots.indexOf(slot);
+  if (i < 0) return;
+  slots.splice(i, 1);
+  slot.g.remove(); slot.box.remove();
+  pulses = pulses.filter(p => p.target !== slot);
+  if (!quiet) { midiPanic(); closeMenu(); }
+}
+// premier point libre le plus proche de (gx, gy), ou null si la grille est pleine
+function freeCellNear(gx, gy) {
+  let best = null, bd = Infinity;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (slots.some(s => s.gx === x && s.gy === y)) continue;
+    const d = Math.hypot(x - gx, y - gy);
+    if (d < bd) { bd = d; best = [x, y]; }
+  }
+  return best;
+}
+const randomLines = () => Array.from({ length: 6 }, () => (Math.random() < 0.5 ? 1 : 0));
+// change la taille de la grille (de N_MIN à N_MAX) ; refuse si un hexagone sortirait du plateau
+function setGridSize(n) {
+  if (n < N_MIN || n > N_MAX || slots.some(s => s.gx >= n || s.gy >= n)) return false;
+  N = n;
+  drawGrid();
+  slots.forEach(drawSlot);
+  return true;
+}
+
+// les six hexagrammes de départ
+[[0, 2, '111111'], [2, 0, '101010'], [4, 1, '111000'], [5, 3, '010101'], [3, 4, '000111'], [1, 4, '100110']]
+  .forEach(([gx, gy, l]) => addSlot({ gx, gy, lines: bits(l) }));
+
 $('rotAll').addEventListener('change', e => {
   for (const s of slots) setRotOn(s, e.target.checked);
 });
@@ -796,15 +1008,16 @@ function getSetup() {
   return {
     hexacorde: 1,
     date: stamp().iso,
-    pas: tickMs, tonique: opt.tonic, portee: opt.softRange, mutation: opt.mutate,
-    amorce: opt.loop ? opt.loopN : 0,
+    grille: N, pas: tickMs, tonique: opt.tonic, octave: opt.octave, portee: opt.softRange, mutation: opt.mutate,
     son: { onde: snd.wave, a: snd.a, d: snd.d, s: snd.s, r: snd.r,
            filtre: snd.ftype, coupure: snd.fcut, q: snd.fq, env: snd.fenv },
     hexagrammes: slots.map(s => ({
-      lettre: LABELS[s.id], pos: [s.gx, s.gy], traits: s.lines.join(''), depart: s.initial.join(''),
+      lettre: s.label, pos: [s.gx, s.gy], traits: s.lines.join(''), depart: s.initial.join(''),
       gamme: s.mode, canal: s.channel + 1,
       rotation: { active: s.rotOn, sens: s.rotDir > 0 ? 'horaire' : 'antihoraire',
-                  vitesse: speedCode(s.rotSpeed), angle: mod6(s.rot) * 60 },
+                  vitesse: speedCode(s.rotSpeed), angle: modn(s.rot, s.n) * 60 },
+      ...(s.active ? {} : { actif: false }),
+      ...(s.loopOn ? { amorce: s.loopN } : {}),
       // les notes personnalisées ne sont écrites que si elles sont actives (sinon la gamme suffit)
       ...(s.customOn ? { notes: { active: true, plein: s.custom.map(c => c.p), brise: s.custom.map(c => c.b) } } : {}),
     })),
@@ -826,23 +1039,27 @@ function parseSetup(text) {
     try { d = JSON.parse(text.slice(a, b + 1)); } catch (e2) { return { error: 'texte illisible (JSON invalide)' }; }
   }
   if (!d || d.hexacorde !== 1 || !Array.isArray(d.hexagrammes)) return { error: 'ce n\'est pas un setup Hexacorde' };
-  if (d.hexagrammes.length !== slots.length) return { error: `il faut ${slots.length} hexagrammes` };
-  const used = new Set(), list = [];
+  const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
+  const grille = Math.round(num(d.grille, N_MIN, N_MAX, 6));
+  if (d.hexagrammes.length > LABELS.length) return { error: `${LABELS.length} hexagrammes au plus` };
+  const used = new Set(), list = [], labels = new Set();
   for (const [i, x] of d.hexagrammes.entries()) {
-    const L = LABELS[i];
+    const L = typeof x.lettre === 'string' && x.lettre.length === 1 && LABELS.includes(x.lettre) && !labels.has(x.lettre) ? x.lettre : '#' + (i + 1);
+    const label = L[0] === '#' ? undefined : L;
+    if (label) labels.add(label);
     const pos = x.pos;
-    if (!Array.isArray(pos) || !pos.every(v => Number.isInteger(v) && v >= 0 && v < N) || pos.length !== 2)
-      return { error: `${L} : position invalide (deux entiers de 0 à ${N - 1})` };
+    if (!Array.isArray(pos) || !pos.every(v => Number.isInteger(v) && v >= 0 && v < grille) || pos.length !== 2)
+      return { error: `${L} : position invalide (deux entiers de 0 à ${grille - 1})` };
     if (used.has(pos.join())) return { error: `${L} : position déjà occupée` };
     used.add(pos.join());
     let lines = null;
-    if (typeof x.traits === 'string' && /^[01]{6}$/.test(x.traits)) lines = bits(x.traits);
+    if (typeof x.traits === 'string' && /^[01]{6,7}$/.test(x.traits)) lines = bits(x.traits);
     else if (Number.isInteger(x.numero) && HEX_LINES[x.numero]) lines = HEX_LINES[x.numero].slice();
-    if (!lines) return { error: `${L} : "traits" (6 chiffres 0 ou 1) ou "numero" (1 à 64) attendu` };
-    const initial = typeof x.depart === 'string' && /^[01]{6}$/.test(x.depart) ? bits(x.depart) : lines.slice();
+    if (!lines) return { error: `${L} : "traits" (6 ou 7 chiffres 0 ou 1) ou "numero" (1 à 64) attendu` };
+    const initial = typeof x.depart === 'string' && /^[01]{6,7}$/.test(x.depart) && x.depart.length === lines.length ? bits(x.depart) : lines.slice();
     const mode = x.gamme === undefined ? 'chromatique' : x.gamme;
     if (!SCALES[mode]) return { error: `${L} : gamme inconnue "${x.gamme}"` };
-    const canal = x.canal === undefined ? i + 1 : x.canal;
+    const canal = x.canal === undefined ? (label ? LABELS.indexOf(label) : i) % 16 + 1 : x.canal;
     if (!Number.isInteger(canal) || canal < 1 || canal > 16) return { error: `${L} : canal de 1 à 16` };
     const r = x.rotation || {};
     const sp = SPEEDS.find(v => v[2] === (r.vitesse === undefined ? 'x1' : r.vitesse));
@@ -852,17 +1069,20 @@ function parseSetup(text) {
     let custom = null, customOn = false;
     if (x.notes !== undefined) {
       const n = x.notes || {};
-      const six = a => Array.isArray(a) && a.length === 6;
+      const six = a => Array.isArray(a) && a.length === lines.length;
       const inRange = v => Number.isInteger(v) && v >= 0 && v < 24;
       if (!six(n.plein) || !n.plein.every(inRange) || !six(n.brise) || !n.brise.every(v => v === null || inRange(v)))
-        return { error: `${L} : notes : "plein" et "brise" = 6 valeurs de 0 à 23 demi-tons (null = silence pour le brisé)` };
+        return { error: `${L} : notes : "plein" et "brise" = autant de valeurs que de traits (6 ou 7), de 0 de 0 à 23 demi-tons (null = silence pour le brisé)` };
       custom = n.plein.map((p, k) => ({ p, b: n.brise[k] }));
       customOn = !!n.active;
     }
-    list.push({ gx: pos[0], gy: pos[1], lines, initial, mode, channel: canal - 1, custom, customOn,
-                rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: mod6(angle / 60) });
+    // amorce : par hexagone ; l'ancien format avait un seul réglage global, pour le premier hexagone
+    const am = x.amorce !== undefined ? x.amorce : (i === 0 ? d.amorce : 0);
+    const loopOn = Number.isFinite(am) && am >= 2;
+    list.push({ label, gx: pos[0], gy: pos[1], lines, initial, mode, channel: canal - 1, custom, customOn,
+                active: x.actif !== false, loopOn, loopN: loopOn ? Math.min(128, Math.round(am)) : 24,
+                rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: modn(angle / 60, lines.length) });
   }
-  const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
   const so = d.son || {}, son = {
     wave: WAVE_GAIN[so.onde] ? so.onde : snd.wave,
     a: Math.round(num(so.a, 1, 500, snd.a)), d: Math.round(num(so.d, 10, 1000, snd.d)),
@@ -871,10 +1091,9 @@ function parseSetup(text) {
     fq: num(so.q, 0.1, 20, snd.fq), fenv: num(so.env, 0, 1, snd.fenv),
   };
   return { cfg: {
-    slots: list, son,
-    pas: Math.round(num(d.pas, 80, 700, 240)), tonique: Math.round(num(d.tonique, 0, 11, 0)),
+    slots: list, son, grille,
+    pas: Math.round(num(d.pas, 80, 700, 240)), tonique: Math.round(num(d.tonique, 0, 11, 0)), octave: Math.round(num(d.octave, -3, 3, 0)),
     portee: num(d.portee, 1, 9, 2.5), mutation: !!d.mutation,
-    amorce: Number.isFinite(d.amorce) && d.amorce >= 2 ? Math.min(128, Math.round(d.amorce)) : 0,
   } };
 }
 
@@ -882,22 +1101,14 @@ function applySetup(cfg) {
   silence();
   tickMs = cfg.pas; $('tempo').value = tickMs; $('tempoVal').textContent = tickMs + ' ms';
   opt.tonic = cfg.tonique; $('tonic').value = opt.tonic;
+  opt.octave = cfg.octave; $('octave').value = opt.octave;
   opt.softRange = cfg.portee; $('soft').value = opt.softRange;
   opt.mutate = cfg.mutation; $('mutate').checked = opt.mutate;
-  opt.loop = cfg.amorce > 0; $('loop').checked = opt.loop;
-  if (opt.loop) { opt.loopN = cfg.amorce; $('loopN').value = opt.loopN; }
   Object.assign(snd, cfg.son); showSound();
-  slots.forEach((s, i) => {
-    const c = cfg.slots[i];
-    Object.assign(s, { gx: c.gx, gy: c.gy, lines: c.lines, initial: c.initial, mode: c.mode, channel: c.channel,
-      rotOn: c.rotOn, rotDir: c.rotDir, rotSpeed: c.rotSpeed, rot: c.rot,
-      rotAcc: 0, rotDelta: 0, rotT0: -1e9, flash: [-99, -99, -99, -99, -99, -99] });
-    s.customOn = c.customOn;
-    if (c.custom) s.custom = c.custom; else fillCustom(s);
-    s.modeSel.value = s.mode; s.chanSel.value = s.channel; s.rotChk.checked = s.rotOn;
-    s.dirBtn.textContent = s.rotDir > 0 ? '↻' : '↺'; s.spdSel.value = s.rotSpeed;
-    drawSlot(s);                              // met aussi à jour le menu d'hexagramme
-  });
+  // on reconstruit tous les hexagones : le nombre et la taille de la grille peuvent changer
+  for (const s of slots.slice()) removeSlot(s, true);
+  setGridSize(cfg.grille);
+  for (const c of cfg.slots) addSlot({ ...c, rot: c.rot });
 }
 
 const say = msg => { $setupMsg.textContent = msg; };
@@ -974,17 +1185,40 @@ $('setupApply').addEventListener('click', () => loadText($setupText.value, 'Text
 const menu = document.createElement('div');
 menu.id = 'ctxMenu'; menu.hidden = true;
 document.body.appendChild(menu);
-const noteOpts = (withSilence, sel) => {
+// 24 notes proposées ; celles de la gamme de l'hexagone sont en couleur vive (classe `in`), les autres
+// en gris (classe `out`), et la tonique est marquée
+const noteOpts = (slot, withSilence, sel) => {
+  const steps = scaleSteps(slot);
   let h = withSilence ? `<option value=""${sel === null ? ' selected' : ''}>· silence</option>` : '';
-  for (let i = 0; i < 24; i++)
-    h += `<option value="${i}"${sel === i ? ' selected' : ''}>${NAMES[(opt.tonic + i) % 12]}${i >= 12 ? "'" : ''}</option>`;
+  for (let i = 0; i < 24; i++) {
+    const cls = !steps || steps.includes(i % 12) ? 'in' : 'out';
+    h += `<option class="${cls}" value="${i}"${sel === i ? ' selected' : ''}>${NAMES[(opt.tonic + i) % 12]}${i >= 12 ? "'" : ''}${i % 12 === 0 ? ' (tonique)' : ''}</option>`;
+  }
   return h;
 };
+// mélange l'ordre des notes personnalisées entre les traits. Gamme : toutes les notes (y compris celle qui
+// n'avait pas de trait plein) sont redistribuées, les n premières sur les traits pleins, les autres sur des
+// traits brisés au hasard. Chromatique : chaque paire plein / brisé reste ensemble.
+// Si l'option n'est pas active, on part des notes de la gamme.
+function shuffleCustom(slot) {
+  if (!slot.customOn) fillCustom(slot);
+  const c = slot.custom, n = slot.n;
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  if (!SCALES[slot.mode].steps) shuffle(c);
+  else {
+    const pool = shuffle(c.flatMap(x => (x.b === null ? [x.p] : [x.p, x.b])));
+    const where = shuffle(Array.from({ length: n }, (_, k) => k));
+    c.forEach((x, k) => { x.p = pool[k]; x.b = null; });
+    pool.slice(n).forEach((v, i) => { c[where[i]].b = v; });
+  }
+  slot.customOn = true;
+  drawSlot(slot);
+}
 function closeMenu() { menu.hidden = true; }
 function openMenu(slot, x, y) {
   const reopen = () => openMenu(slot, x, y);     // pour rafraîchir le titre après un changement d'hexagramme
   menu.innerHTML = `
-    <div class="ctitle">${LABELS[slot.id]} : ${hexLabel(hexNumber(slot.lines))}</div>
+    <div class="ctitle">${slot.label} : ${hexLabel(hexOf(slot))}</div>
     <div class="cform">
       <span>Hexagramme</span><select id="mHex">${hexOptions}</select>
       <span>Gamme</span><select id="mMode">${scaleOptions()}</select>
@@ -993,26 +1227,35 @@ function openMenu(slot, x, y) {
       <div class="crow"><label><input type="checkbox" id="mRot"> active</label>
         <button id="mDir" title="Sens de rotation">↻</button>
         <select id="mSpd" title="Vitesse de rotation">${SPEEDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>
+      <span>Côtés</span>
+      <div class="crow"><label><input type="checkbox" id="mSev"> 7e côté (heptagone)</label></div>
+      <span>Amorce</span>
+      <div class="crow"><label><input type="checkbox" id="mLoop"> tous les</label>
+        <input type="number" id="mLoopN" min="2" max="128" style="width:56px"> pas</div>
       <span>Tourner</span>
       <div class="crow"><button data-r="-1" title="Tourner de 60° dans le sens antihoraire">↺ 60°</button>
         <button data-r="1" title="Tourner de 60° dans le sens horaire">↻ 60°</button></div>
     </div>
     <div class="csep"></div>
     <label class="crow"><input type="checkbox" id="cOn"${slot.customOn ? ' checked' : ''}> Notes personnalisées</label>
-    <div class="cgrid"><b>trait</b><b>plein</b><b>brisé</b>${[0, 1, 2, 3, 4, 5].map(k =>
-      `<span>${k + 1}</span><select data-k="${k}" data-w="p">${noteOpts(false, slot.custom[k].p)}</select>` +
-      `<select data-k="${k}" data-w="b">${noteOpts(true, slot.custom[k].b)}</select>`).join('')}</div>
-    <div class="crow"><button id="cFill" title="Copie les notes de la gamme actuelle">Reprendre la gamme</button></div>
+    <div class="hint">Gamme ${SCALES[slot.mode].label}, tonique ${NAMES[opt.tonic]}</div>
+    <div class="cgrid"><b>trait</b><b>plein</b><b>brisé</b>${Array.from({ length: slot.n }, (_, k) => k).map(k =>
+      `<span>${k + 1}</span><select data-k="${k}" data-w="p">${noteOpts(slot, false, slot.custom[k].p)}</select>` +
+      `<select data-k="${k}" data-w="b">${noteOpts(slot, true, slot.custom[k].b)}</select>`).join('')}</div>
+    <div class="crow"><button id="cFill" title="Copie les notes de la gamme actuelle">Reprendre la gamme</button>
+      <button id="cShuffle" title="Change au hasard l'ordre des notes entre les traits, la note en trop de la gamme comprise">Mélanger l'ordre</button></div>
     <div class="csep"></div>
     <div class="crow"><button id="mReset" title="Remettre cet hexagramme à sa forme de départ">Réinit.</button>
+      <button id="mAct" title="Griser l'hexagone : il ne joue ni ne reçoit">${slot.active ? 'Désactiver' : 'Activer'}</button>
+      <button id="mDel" title="Supprimer cet hexagone">Supprimer</button>
       <button id="cClose">Fermer</button></div>`;
   const q = s => menu.querySelector(s);
 
   // réglages (mêmes fonctions que le panneau)
-  q('#mHex').value = hexNumber(slot.lines);
+  q('#mHex').value = hexOf(slot);
   q('#mHex').addEventListener('change', e => { setHexagram(slot, +e.target.value); reopen(); });
   q('#mMode').value = slot.mode;
-  q('#mMode').addEventListener('change', e => setMode(slot, e.target.value));
+  q('#mMode').addEventListener('change', e => { setMode(slot, e.target.value); reopen(); });   // les notes proposées suivent la gamme
   q('#mChan').value = slot.channel;
   q('#mChan').addEventListener('change', e => setChannel(slot, +e.target.value));
   q('#mRot').checked = slot.rotOn;
@@ -1024,6 +1267,13 @@ function openMenu(slot, x, y) {
   });
   q('#mSpd').value = slot.rotSpeed;
   q('#mSpd').addEventListener('change', e => setRotSpeed(slot, +e.target.value));
+  q('#mSev').checked = slot.n === 7;
+  q('#mSev').addEventListener('change', e => { setSides(slot, e.target.checked ? 7 : 6); reopen(); });
+  q('#mLoop').checked = slot.loopOn; q('#mLoopN').value = slot.loopN;
+  q('#mLoop').addEventListener('change', e => setLoop(slot, e.target.checked, q('#mLoopN').value));
+  q('#mLoopN').addEventListener('input', e => { slot.loopN = Math.max(2, +e.target.value || 24); slot.loopNum.value = slot.loopN; });
+  q('#mAct').addEventListener('click', () => { setActive(slot, !slot.active); reopen(); });
+  q('#mDel').addEventListener('click', () => removeSlot(slot));
   for (const b of menu.querySelectorAll('[data-r]')) b.addEventListener('click', () => rotateBy(slot, +b.dataset.r));
   q('#mReset').addEventListener('click', () => { resetSlot(slot); reopen(); });
 
@@ -1040,13 +1290,63 @@ function openMenu(slot, x, y) {
     fillCustom(slot); slot.customOn = true; drawSlot(slot);
     reopen();
   });
+  q('#cShuffle').addEventListener('click', () => { shuffleCustom(slot); reopen(); });
   q('#cClose').addEventListener('click', closeMenu);
 
+  placeMenu(x, y);
+}
+function placeMenu(x, y) {
   menu.hidden = false;
   const w = menu.offsetWidth, h = menu.offsetHeight;
   menu.style.left = Math.max(4, Math.min(x, innerWidth - w - 8)) + 'px';
   menu.style.top = Math.max(4, Math.min(y, innerHeight - h - 8)) + 'px';
 }
+// menu du clic droit sur plusieurs hexagrammes sélectionnés
+function openSelMenu(x, y) {
+  const sel = selected();
+  menu.innerHTML = `
+    <div class="ctitle">${sel.length} hexagrammes sélectionnés</div>
+    <div class="crow"><button id="sDel">Supprimer</button>
+      <button id="sOff">Désactiver</button><button id="sOn">Activer</button></div>
+    <div class="crow"><button id="sClear">Désélectionner</button><button id="cClose">Fermer</button></div>`;
+  const q = s => menu.querySelector(s);
+  q('#sDel').addEventListener('click', deleteSelected);
+  q('#sOff').addEventListener('click', () => { sel.forEach(s => setActive(s, false)); closeMenu(); });
+  q('#sOn').addEventListener('click', () => { sel.forEach(s => setActive(s, true)); closeMenu(); });
+  q('#sClear').addEventListener('click', () => { clearSel(); closeMenu(); });
+  q('#cClose').addEventListener('click', closeMenu);
+  placeMenu(x, y);
+}
+// menu du clic droit sur la grille : nouvel hexagramme, taille de la grille
+function openBoardMenu(x, y, gx, gy) {
+  const free = freeCellNear(gx, gy);
+  const canShrink = N > N_MIN && !slots.some(s => s.gx >= N - 1 || s.gy >= N - 1);
+  menu.innerHTML = `
+    <div class="ctitle">Grille ${N}x${N}</div>
+    <div class="crow"><button id="bAdd"${free && slots.length < LABELS.length ? '' : ' disabled'}
+      title="Ajoute un hexagramme tiré au hasard sur le point libre le plus proche">Nouvel hexagramme ici</button></div>
+    <div class="crow"><button id="bGrow"${N < N_MAX ? '' : ' disabled'}>Agrandir (${N + 1}x${N + 1})</button>
+      <button id="bShrink"${canShrink ? '' : ' disabled'}
+        title="${canShrink ? '' : 'Un hexagone occupe la dernière ligne ou colonne (ou taille minimale)'}">Réduire (${N - 1}x${N - 1})</button></div>
+    ${selected().length ? `<div class="crow"><button id="bSel" title="Supprime les hexagrammes sélectionnés">Supprimer la sélection (${selected().length})</button></div>` : ''}
+    <div class="crow"><button id="cClose">Fermer</button></div>`;
+  const q = s => menu.querySelector(s);
+  if (q('#bSel')) q('#bSel').addEventListener('click', deleteSelected);
+  q('#bAdd').addEventListener('click', () => {
+    if (free) addSlot({ gx: free[0], gy: free[1], lines: randomLines() });
+    closeMenu();
+  });
+  q('#bGrow').addEventListener('click', () => { setGridSize(N + 1); openBoardMenu(x, y, gx, gy); });
+  q('#bShrink').addEventListener('click', () => { setGridSize(N - 1); openBoardMenu(x, y, gx, gy); });
+  q('#cClose').addEventListener('click', closeMenu);
+  placeMenu(x, y);
+}
+svg.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  const p = svgPoint(e);
+  openBoardMenu(e.clientX, e.clientY,
+    Math.max(0, Math.min(N - 1, Math.round((p.x - M) / S))), Math.max(0, Math.min(N - 1, Math.round((p.y - M) / S))));
+});
 document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
 
@@ -1151,6 +1451,195 @@ const envUp = () => { envDrag = null; };
 envCv.addEventListener('pointerup', envUp);
 envCv.addEventListener('pointercancel', envUp);
 showSound();
+
+// ===== src/js/18-audio-encode.js =====
+//: Encodeurs audio : WAV et FLAC (sans perte, 16 bits mono)
+// ---------- Encodeurs audio ----------
+// entrée : liste de blocs Int16Array (mono) et fréquence d'échantillonnage
+
+function encodeWav(chunks, n, rate) {
+  const buf = new ArrayBuffer(44 + 2 * n), v = new DataView(buf);
+  const tag = (o, s) => { for (let i = 0; i < 4; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  tag(0, 'RIFF'); v.setUint32(4, 36 + 2 * n, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  tag(36, 'data'); v.setUint32(40, 2 * n, true);
+  let o = 44;
+  for (const c of chunks) for (let i = 0; i < c.length; i++, o += 2) v.setInt16(o, c[i], true);
+  return new Uint8Array(buf);
+}
+
+const CRC8 = new Uint8Array(256), CRC16 = new Uint16Array(256);
+for (let i = 0; i < 256; i++) {
+  let a = i, b = i << 8;
+  for (let k = 0; k < 8; k++) { a = a & 0x80 ? ((a << 1) ^ 0x07) & 255 : (a << 1) & 255; b = b & 0x8000 ? ((b << 1) ^ 0x8005) & 0xffff : (b << 1) & 0xffff; }
+  CRC8[i] = a; CRC16[i] = b;
+}
+const crc8 = bytes => bytes.reduce((c, x) => CRC8[c ^ x], 0);
+const crc16 = bytes => bytes.reduce((c, x) => ((c << 8) & 0xffff) ^ CRC16[(c >> 8) ^ x], 0);
+
+// écrivain de bits (poids fort d'abord) ; put(v, n) avec n <= 24
+function bitWriter() {
+  const out = []; let acc = 0, nb = 0;
+  const w = {
+    out,
+    put(v, n) {
+      acc = (acc << n) | (v & ((1 << n) - 1)); nb += n;
+      while (nb >= 8) { nb -= 8; out.push((acc >> nb) & 255); }
+      acc &= (1 << nb) - 1;
+    },
+    unary(q) { while (q >= 16) { w.put(0, 16); q -= 16; } w.put(1, q + 1); },   // q zéros puis un 1
+    align() { if (nb) w.put(0, 8 - nb); },
+  };
+  return w;
+}
+// numéro de trame : nombre codé façon UTF-8
+function utf8num(n) {
+  if (n < 0x80) return [n];
+  let len = 2;
+  while (n >= Math.pow(2, 5 * len + 1)) len++;
+  const tail = [];
+  for (let i = 0; i < len - 1; i++) { tail.unshift(0x80 | (n & 0x3f)); n = Math.floor(n / 64); }
+  return [((0xff00 >> len) & 0xff) | n, ...tail];
+}
+const zig = r => (r >= 0 ? 2 * r : -2 * r - 1);
+
+// coût en bits du codage de Rice de u[a..b) avec le paramètre k
+function riceBits(u, a, b, k) { let s = (b - a) * (k + 1); for (let i = a; i < b; i++) s += Math.floor(u[i] / (1 << k)); return s; }
+function bestK(u, a, b) {
+  let sum = 0; for (let i = a; i < b; i++) sum += u[i];
+  const mean = sum / Math.max(1, b - a);
+  const k0 = Math.max(0, Math.min(14, Math.floor(Math.log2(mean * 0.6931 + 1e-9))));
+  let best = k0, bb = riceBits(u, a, b, k0);
+  if (k0 < 14) { const c = riceBits(u, a, b, k0 + 1); if (c < bb) { bb = c; best = k0 + 1; } }
+  return { k: best, bits: bb };
+}
+
+// résidus du prédicteur fixe d'ordre o (les o premiers échantillons restent en clair)
+function fixedResidual(x, o) {
+  const r = new Array(x.length - o);
+  for (let i = o; i < x.length; i++) {
+    r[i - o] = o === 0 ? x[i] : o === 1 ? x[i] - x[i - 1]
+      : o === 2 ? x[i] - 2 * x[i - 1] + x[i - 2]
+      : o === 3 ? x[i] - 3 * x[i - 1] + 3 * x[i - 2] - x[i - 3]
+      : x[i] - 4 * x[i - 1] + 6 * x[i - 2] - 4 * x[i - 3] + x[i - 4];
+  }
+  return r;
+}
+
+function flacSubframe(w, x) {
+  const n = x.length;
+  if (x.every(v => v === x[0])) { w.put(0, 8); w.put(x[0], 16); return; }        // CONSTANT
+  let o = 0, bestAbs = Infinity;
+  for (let k = 0; k <= 4 && k < n; k++) {
+    const r = fixedResidual(x, k); let s = 0;
+    for (const v of r) s += Math.abs(v);
+    if (s < bestAbs) { bestAbs = s; o = k; }
+  }
+  const u = fixedResidual(x, o).map(zig);                // u[i] correspond à l'échantillon o + i
+  let best = null;
+  for (let p = 0; p <= 5; p++) {
+    const parts = 1 << p, size = n >> p;
+    if (n % parts || size <= o) break;
+    let total = 0; const ks = [];
+    for (let j = 0; j < parts; j++) {
+      const a = j === 0 ? 0 : j * size - o, b = (j + 1) * size - o, r = bestK(u, a, b);
+      ks.push(r.k); total += r.bits + 4;
+    }
+    if (!best || total < best.total) best = { p, ks, total, size };
+  }
+  w.put((0b001000 + o) << 1, 8);                          // FIXED, ordre o
+  for (let i = 0; i < o; i++) w.put(x[i], 16);             // échantillons de départ
+  w.put(0, 2); w.put(best.p, 4);                           // Rice 4 bits, ordre de partition
+  best.ks.forEach((k, j) => {
+    const a = j === 0 ? 0 : j * best.size - o, b = (j + 1) * best.size - o;
+    w.put(k, 4);
+    for (let i = a; i < b; i++) { w.unary(Math.floor(u[i] / (1 << k))); w.put(u[i] & ((1 << k) - 1), k); }
+  });
+}
+
+function encodeFlac(chunks, n, rate) {
+  const all = new Int16Array(n);
+  let o = 0; for (const c of chunks) { all.set(c, o); o += c.length; }
+  const BS = 4096, w = bitWriter();
+  for (const b of [0x66, 0x4c, 0x61, 0x43, 0x80, 0, 0, 34]) w.put(b, 8);     // "fLaC", bloc STREAMINFO (dernier)
+  w.put(BS, 16); w.put(BS, 16); w.put(0, 24); w.put(0, 24);                 // tailles de bloc et de trame
+  w.put(rate >> 4, 16); w.put(rate & 15, 4); w.put(0, 3); w.put(15, 5);      // fréquence, 1 canal, 16 bits
+  w.put(Math.floor(n / 4294967296), 4); w.put(n >>> 16, 16); w.put(n & 0xffff, 16);   // nombre d'échantillons
+  for (let i = 0; i < 16; i++) w.put(0, 8);                                  // MD5 non calculée
+  const frames = Math.max(1, Math.ceil(n / BS));
+  for (let f = 0; f < frames; f++) {
+    const x = all.subarray(f * BS, Math.min(n, (f + 1) * BS)), len = x.length;
+    const fw = bitWriter();
+    fw.put(0xff, 8); fw.put(0xf8, 8);                                       // synchro, taille de bloc fixe
+    fw.put(len === BS ? 12 : 7, 4); fw.put(0, 4);                           // taille de bloc, fréquence dans STREAMINFO
+    fw.put(0, 4); fw.put(4, 3); fw.put(0, 1);                               // mono, 16 bits
+    for (const b of utf8num(f)) fw.put(b, 8);
+    if (len !== BS) fw.put(len - 1, 16);
+    fw.put(crc8(fw.out), 8);
+    if (len) flacSubframe(fw, Array.from(x)); else fw.put(0, 8), fw.put(0, 16);
+    fw.align();
+    fw.put(crc16(fw.out), 16);
+    for (const b of fw.out) w.out.push(b);
+  }
+  return Uint8Array.from(w.out);
+}
+
+// ===== src/js/19-record-ui.js =====
+//: Enregistrement : cases d'armement et boutons « Sauvegarder l'enregistrement » (MIDI, audio .flac / .wav)
+// ---------- Enregistrement MIDI et audio ----------
+const $recMsg = $('recMsg'), $arec = $('arec');
+const recSay = m => { $recMsg.textContent = m; };
+
+// MIDI : la case lance l'enregistrement, le bouton l'arrête et télécharge le fichier
+$rec.addEventListener('change', () => {
+  if ($rec.checked) { beginRecording(); recSay('Enregistrement MIDI en cours.'); }
+  else if (rec) { rec.live = false; recSay('Enregistrement MIDI arrêté : il reste à sauvegarder.'); }
+});
+$recSave.addEventListener('click', () => {
+  if (finishRecording()) { $rec.checked = false; recSay('Fichier MIDI téléchargé.'); }
+  else recSay('Rien à sauvegarder : aucune note enregistrée.');
+});
+
+// audio : on branche un ScriptProcessor sur le volume général ; les échantillons (Int16, mono) sont
+// gardés en blocs. Rien n'est gardé avant le premier Jouer.
+let arec = null, aproc = null;
+function audioTap(on) {
+  if (on && !aproc) {
+    ensureAudio();
+    aproc = ac.createScriptProcessor(4096, 1, 1);
+    aproc.onaudioprocess = e => {
+      if (!arec || !arec.live || !arec.started) return;
+      const x = e.inputBuffer.getChannelData(0), out = new Int16Array(x.length);
+      for (let i = 0; i < x.length; i++) {
+        const v = Math.max(-1, Math.min(1, x[i]));
+        out[i] = v < 0 ? v * 32768 : v * 32767;
+      }
+      arec.chunks.push(out); arec.n += out.length;
+    };
+    master.connect(aproc); aproc.connect(ac.destination);    // sa sortie reste muette
+  } else if (!on && aproc) {
+    master.disconnect(aproc); aproc.disconnect(); aproc.onaudioprocess = null; aproc = null;
+  }
+}
+$arec.addEventListener('change', () => {
+  if ($arec.checked) {
+    audioTap(true);
+    arec = { chunks: [], n: 0, live: true, started: running };
+    recSay('Enregistrement audio en cours' + (running ? '.' : ' (il commence au premier Jouer).'));
+  } else if (arec) {
+    arec.live = false; audioTap(false);
+    recSay('Enregistrement audio arrêté : il reste à sauvegarder.');
+  }
+});
+$arecSave.addEventListener('click', () => {
+  if (!arec || !arec.n) { recSay('Rien à sauvegarder : aucun son enregistré.'); return; }
+  const fmt = $('afmt').value, r = arec;
+  arec = null; $arec.checked = false; audioTap(false);
+  const bytes = fmt === 'wav' ? encodeWav(r.chunks, r.n, ac.sampleRate) : encodeFlac(r.chunks, r.n, ac.sampleRate);
+  download(bytes, `${fileBase()}-${fileStamp()}.${fmt}`, fmt === 'wav' ? 'audio/wav' : 'audio/flac');
+  recSay(`Fichier .${fmt} téléchargé (${(r.n / ac.sampleRate).toFixed(1)} s).`);
+});
 
 // ===== src/js/99-start.js =====
 //: Démarrage de l'animation

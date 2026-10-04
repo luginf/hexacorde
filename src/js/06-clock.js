@@ -13,13 +13,12 @@ function start() {
   if (running) return;
   running = true; nextAt = performance.now();
   $play.textContent = 'Pause'; $play.classList.add('on');
-  if ($rec.checked) beginRecording();
+  if (arec) arec.started = true;            // l'audio commence au premier Jouer
   schedule();
 }
 function stop() {
   running = false; clearTimeout(timer);
   $play.textContent = 'Jouer'; $play.classList.remove('on');
-  finishRecording();
   midiPanic();
 }
 function silence() {

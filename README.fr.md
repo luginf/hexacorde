@@ -2,7 +2,7 @@
 
 [English](README.md) | **Français**
 
-Un séquenceur oraculaire. Six hexagrammes du Yi Jing sont posés sur une grille de 6x6 points. Chaque trait d'un hexagramme est une note, et il envoie cette note vers un autre hexagramme, qui la répercute à son tour. Le morceau naît de la disposition des hexagrammes sur la grille.
+Un séquenceur oraculaire. Six hexagrammes du Yi Jing sont posés sur une grille de 6x6 points (on peut ajouter des hexagrammes et agrandir la grille, jusqu'à 12x12). Chaque trait d'un hexagramme est une note, et il envoie cette note vers un autre hexagramme, qui la répercute à son tour. Le morceau naît de la disposition des hexagrammes sur la grille.
 
 Une seule page HTML, du JavaScript pur, aucune dépendance, aucun serveur. L'interface est en français.
 
@@ -20,7 +20,11 @@ Ouvrir `index.html` dans un navigateur récent (Chrome, Firefox...), puis clique
 - **Tirage** : tire au hasard les traits des six hexagrammes. **Placement au hasard** : les redispose sur la grille.
 - **Jouer / Pause** : démarre et arrête l'horloge. **Silence** : efface toutes les impulsions en cours.
 - **Panneau, un bloc par hexagone** : choisir son hexagramme (parmi les 64, avec son nom), sa gamme, son canal MIDI, régler sa rotation, ou le **Réinit.**
-- **Clic droit sur un hexagone** : menu avec tous ses réglages (hexagramme, gamme, canal MIDI, rotation, sens, vitesse, Réinit.), un cran de 60° (↺ ou ↻) et le choix de ses notes à la main (voir plus bas). Le panneau et le menu restent synchronisés.
+- **Glisser un trait** : on saisit un côté de l'hexagone et on tourne autour de son centre ; l'hexagone pivote par crans de 60°, dans un sens ou dans l'autre (un simple clic bascule toujours le trait).
+- **Tirer un rectangle** sur le fond de la grille : sélectionne plusieurs hexagones (la sélection est entourée ; Maj ajoute à la sélection, un clic sur le fond désélectionne). Clic droit sur l'un d'eux : **Supprimer**, **Désactiver** ou **Activer** toute la sélection (la touche Suppr supprime aussi).
+- **Clic droit sur un hexagone** : menu avec tous ses réglages (hexagramme, gamme, canal MIDI, rotation, sens, vitesse, **amorce tous les N pas**, Réinit.), un cran de 60° (↺ ou ↻), le choix de ses notes à la main (voir plus bas), et **Désactiver** (l'hexagone devient grisé : il ne joue ni ne reçoit) ou **Supprimer**. Le panneau et le menu restent synchronisés.
+- **7e côté** (dans le panneau et le menu du clic droit) : l'hexagone devient un heptagone. Le 7e côté est un trait plein de plus, avec la note suivante de la gamme, et il envoie et reçoit des impulsions comme les autres (les crans de rotation valent alors 360/7 degrés). Le nom d'hexagramme affiché est celui des six premiers traits (avec « +1 »). Avec une gamme pentatonique, l'heptagone prend les deux notes manquantes de la gamme à 7 notes correspondante (majeur ou mineur naturel) au lieu d'octaves. Décocher revient à six côtés. Si les notes personnalisées sont encore celles de la gamme, elles sont redistribuées sur le nouveau nombre de côtés (une gamme de 7 notes remplit les 7 côtés) ; les notes modifiées à la main sont conservées.
+- **Clic droit sur la grille** : **Nouvel hexagramme ici** (ajoute un hexagramme tiré au hasard sur le point libre le plus proche, jusqu'à 26), **Agrandir** / **Réduire** la grille (de 3x3 à 12x12 ; la réduction est refusée tant qu'un hexagone occupe la dernière ligne ou colonne).
 - **Flèche « Hexagrammes : édition »** : replie tous les blocs d'édition pour atteindre plus vite le bas du panneau (l'état est retenu). La **molette** le tourne aussi (bas = horaire, haut = antihoraire).
 - **Setup** (bloc repliable en bas du panneau) : sauvegarder et recharger toute la configuration.
 
@@ -48,12 +52,12 @@ Chaque hexagramme est dessiné comme un hexagone, dont les six côtés sont ses 
   | Brisé | do# | ré# | fa | sol | la | si |
 
 - **Gammes** (au choix pour chaque hexagone) : majeur, mineur naturel, dorien, phrygien, lydien, mixolydien, pentatonique majeure ou mineure. Le côté `k` joue le degré `k` de la gamme (on repart à l'octave quand elle a moins de 6 notes). Un trait plein joue la note et la renvoie. Un trait brisé fait silence et ne renvoie rien.
-- **Tonique** : réglage global qui transpose l'ensemble.
-- **Octave** : elle dépend de la rangée de la grille, les rangées du bas sont graves et celles du haut sont aiguës.
+- **Tonique** : réglage global qui transpose l'ensemble. **Octave** : octave de base globale (-3 à +3) qui décale tous les sons.
+- **Octave par rangée** : elle dépend de la rangée de la grille, les rangées du bas sont graves et celles du haut sont aiguës.
 
 ### Notes personnalisées
 
-Pour plus de variété, chaque hexagone peut avoir ses propres notes. Clic droit sur l'hexagone, case **Notes personnalisées** : pour chacun des 6 traits, on choisit la note du trait plein et celle du trait brisé, sur deux octaves (une apostrophe, comme dans « ré' », marque l'octave du dessus), ou « silence » pour le trait brisé. Modifier une note active l'option, la décocher revient à la gamme. **Reprendre la gamme** copie les notes de la gamme actuelle pour partir de là. Un trait brisé qui a une note joue doucement et envoie une impulsion douce, comme en chromatique.
+Pour plus de variété, chaque hexagone peut avoir ses propres notes. Clic droit sur l'hexagone, case **Notes personnalisées** : pour chacun des 6 traits, on choisit la note du trait plein et celle du trait brisé, sur deux octaves (une apostrophe, comme dans « ré' », marque l'octave du dessus), ou « silence » pour le trait brisé. Les 24 notes sont proposées ; celles de la gamme de l'hexagone sont en ambre vif, les autres en gris, et la tonique est marquée « (tonique) ». Modifier une note active l'option, la décocher revient à la gamme. **Reprendre la gamme** copie les notes de la gamme actuelle pour partir de là ; avec une gamme de 7 notes, celle qui n'a pas de trait plein va sur un trait brisé, pour que toute la gamme soit présente (un brisé ne sonne que s'il est touché). **Mélanger l'ordre** mélange les notes au hasard. Avec une gamme, toutes les notes de la gamme (y compris celle qui n'avait pas de trait plein, comme le 7e degré) sont redistribuées : les premières sur les traits pleins, les autres sur des traits brisés au hasard. En chromatique, chaque paire plein / brisé reste ensemble. Un trait brisé qui a une note joue doucement et envoie une impulsion douce, comme en chromatique.
 
 ### La propagation
 
@@ -68,7 +72,7 @@ Pour plus de variété, chaque hexagone peut avoir ses propres notes. Clic droit
 - **Rotation à la main** : clic droit puis ↺ / ↻, ou molette. Elle fonctionne aussi à l'arrêt.
 - **Rotation** : l'hexagone tourne par pas de 60°. Chaque trait garde sa note, mais sa direction d'envoi et le trait touché à la réception changent. Pour chaque hexagone : une case pour l'activer, un bouton ↻ / ↺ pour le **sens** (horaire ou antihoraire) et une **vitesse** : ×1 (un pas de 60° à chaque pas d'horloge), ×2 ou ×3 (deux ou trois pas de 60° par pas), ÷2, ÷3, ÷4 ou ÷8 (un pas de 60° tous les 2, 3, 4 ou 8 pas). Case « ↻ tous » pour activer la rotation partout.
 - **Mutation des traits** : une impulsion de polarité opposée au côté touché inverse ce trait (forte sur brisé, douce sur plein). L'hexagramme évolue comme dans une consultation.
-- **Amorce A tous les N pas** : relance l'hexagone A à intervalle régulier.
+- **Amorce** (par hexagone, dans le panneau et le menu du clic droit) : joue une note de cet hexagone tous les N pas.
 - **Portée du trait brisé** : distance maximale (en cases) des impulsions douces.
 - **Pas** : durée d'un pas de l'horloge, en millisecondes.
 - **Son interne : édition** (bloc repliable sous « Son interne ») : voir la section suivante.
@@ -83,7 +87,7 @@ Le bloc repliable **Son interne : édition** règle le son de tous les hexagones
 
 ## Sauvegarder un setup
 
-Le bloc repliable **Setup** (en bas du panneau) garde la disposition, les traits, les gammes, les canaux, les rotations, les notes personnalisées et les réglages (pas, tonique, portée, mutation, amorce). Il ne garde pas les impulsions en cours, le volume ni la sortie MIDI.
+Le bloc repliable **Setup** (en bas du panneau) garde la disposition, les traits, les gammes, les canaux, les rotations, les notes personnalisées et les réglages (pas, tonique, portée, mutation). Il garde aussi le nombre d'hexagones, la taille de la grille, les hexagones désactivés et l'amorce de chacun. Il ne garde pas les impulsions en cours, le volume ni la sortie MIDI.
 
 - **Nom** : pré-rempli avec la date et l'heure (`setup-2026-10-04_18-34-40`), mises à jour à chaque sauvegarde tant que vous ne le modifiez pas. Le setup contient aussi la date en ISO 8601.
 - **Sauver / Charger / Suppr.** : dans la mémoire du navigateur, sous ce nom.
@@ -93,7 +97,7 @@ Le bloc repliable **Setup** (en bas du panneau) garde la disposition, les traits
 Le texte est un JSON lisible, un hexagramme par ligne :
 
 ```
-{"hexacorde":1,"date":"2026-10-04T18:34:40+02:00","pas":240,"tonique":0,"portee":2.5,"mutation":false,"amorce":0,"son":{"onde":"square","a":5,"d":250,"s":0.1,"r":150,"filtre":"lowpass","coupure":3200,"q":0.7,"env":0},
+{"hexacorde":1,"date":"2026-10-04T18:34:40+02:00","grille":6,"pas":240,"tonique":0,"portee":2.5,"mutation":false,"son":{"onde":"square","a":5,"d":250,"s":0.1,"r":150,"filtre":"lowpass","coupure":3200,"q":0.7,"env":0},
 "hexagrammes": [
   {"lettre":"A","pos":[2,4],"traits":"010000","depart":"010000","gamme":"phrygien","canal":1,"rotation":{"active":false,"sens":"horaire","vitesse":"x1","angle":0}},
   {"lettre":"D","pos":[1,3],"traits":"000000","depart":"000000","gamme":"phrygien","canal":4,"rotation":{"active":true,"sens":"horaire","vitesse":"x1","angle":0}},
@@ -101,7 +105,7 @@ Le texte est un JSON lisible, un hexagramme par ligne :
 ]}
 ```
 
-On peut l'écrire ou le retoucher à la main : `pos` = colonne et ligne de 0 à 5, `traits` = 6 chiffres (1 plein, 0 brisé, trait 1 en premier) ou `"numero": 11` à la place, `vitesse` parmi `x1 x2 x3 /2 /3 /4 /8`, `angle` multiple de 60. Si le texte est invalide, rien ne change et l'erreur précise est affichée.
+On peut l'écrire ou le retoucher à la main : `grille` = taille de la grille (3 à 12, 6 par défaut), `octave` = octave de base (-3 à 3), `traits` peut avoir 7 chiffres (heptagone), `pos` = colonne et ligne de 0 à `grille`-1, `actif: false` = hexagone désactivé, `amorce: N` = amorce tous les N pas, `traits` = 6 chiffres (1 plein, 0 brisé, trait 1 en premier) ou `"numero": 11` à la place, `vitesse` parmi `x1 x2 x3 /2 /3 /4 /8`, `angle` multiple de 60. Si le texte est invalide, rien ne change et l'erreur précise est affichée.
 
 ## Piloter un synthé externe (MIDI en direct)
 
@@ -114,12 +118,19 @@ Chaque note jouée part en note on immédiatement, avec son note off 90 % d'un p
 
 Web MIDI fonctionne dans Chrome, Edge et Firefox, pas dans Safari. **Firefox n'expose pas Web MIDI sur une page ouverte depuis le disque (`file://`)** : le bouton affiche alors un message d'erreur. Il faut servir la page en local : `python3 -m http.server` dans le dossier, puis ouvrir `http://localhost:8000`. (Vérifié avec Firefox 157 : `requestMIDIAccess` est indéfini en `file://` et défini en `http://localhost`. Chrome accepte les deux.)
 
-## Enregistrer en fichier MIDI
+## Enregistrer (MIDI et audio)
 
-Cocher **Enregistrer en fichier MIDI** et choisir un **Nom**. Tout ce qui sonne entre Jouer et Pause est enregistré. À la Pause, le navigateur télécharge `nom-AAAAMMJJ-HHMMSS.mid`. La date et l'heure évitent d'écraser une prise précédente. Pour choisir le dossier à chaque fois, activer « Demander où enregistrer » dans les réglages de téléchargement du navigateur.
+Choisir un **Nom des fichiers**. L'enregistrement et la sauvegarde sont deux gestes séparés, rien n'est caché :
+
+- **Enregistrer le MIDI** : la case lance l'enregistrement de toutes les notes jouées (la Pause ne l'arrête pas, on peut donc faire pause et reprendre dans la même prise). **Sauvegarder l'enregistrement** l'arrête et télécharge `nom-AAAAMMJJ-HHMMSS.mid`. Décocher la case arrête seulement l'enregistrement : la prise reste jusqu'à sa sauvegarde (recocher lance une nouvelle prise).
+- **Enregistrer l'audio** : pareil pour le son interne, sauvegardé en **.flac** (sans perte, par défaut) ou en **.wav** (choix dans le menu). Mono, 16 bits, à la fréquence d'échantillonnage du navigateur ; la prise commence au premier Jouer et tient compte du volume.
+
+La date et l'heure évitent d'écraser une prise précédente. Pour choisir le dossier à chaque fois, activer « Demander où enregistrer » dans les réglages de téléchargement du navigateur.
+
+Détails du fichier MIDI :
 
 - Format 1, 480 PPQ, tempo suivant le réglage « Pas » (un pas = une croche).
-- Une piste de tempo, puis une piste par hexagone ayant sonné, avec le canal choisi pour chaque hexagone (A = canal 1, B = canal 2, ... F = canal 6 par défaut).
+- Une piste de tempo, puis une piste par hexagone ayant sonné, avec le canal choisi pour chaque hexagone (A = canal 1, B = canal 2, ... par défaut).
 - Vélocité 96 pour un trait plein, 56 pour un trait brisé.
 
 ## À venir

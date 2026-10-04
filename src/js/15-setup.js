@@ -27,15 +27,16 @@ function getSetup() {
   return {
     hexacorde: 1,
     date: stamp().iso,
-    pas: tickMs, tonique: opt.tonic, portee: opt.softRange, mutation: opt.mutate,
-    amorce: opt.loop ? opt.loopN : 0,
+    grille: N, pas: tickMs, tonique: opt.tonic, octave: opt.octave, portee: opt.softRange, mutation: opt.mutate,
     son: { onde: snd.wave, a: snd.a, d: snd.d, s: snd.s, r: snd.r,
            filtre: snd.ftype, coupure: snd.fcut, q: snd.fq, env: snd.fenv },
     hexagrammes: slots.map(s => ({
-      lettre: LABELS[s.id], pos: [s.gx, s.gy], traits: s.lines.join(''), depart: s.initial.join(''),
+      lettre: s.label, pos: [s.gx, s.gy], traits: s.lines.join(''), depart: s.initial.join(''),
       gamme: s.mode, canal: s.channel + 1,
       rotation: { active: s.rotOn, sens: s.rotDir > 0 ? 'horaire' : 'antihoraire',
-                  vitesse: speedCode(s.rotSpeed), angle: mod6(s.rot) * 60 },
+                  vitesse: speedCode(s.rotSpeed), angle: modn(s.rot, s.n) * 60 },
+      ...(s.active ? {} : { actif: false }),
+      ...(s.loopOn ? { amorce: s.loopN } : {}),
       // les notes personnalisées ne sont écrites que si elles sont actives (sinon la gamme suffit)
       ...(s.customOn ? { notes: { active: true, plein: s.custom.map(c => c.p), brise: s.custom.map(c => c.b) } } : {}),
     })),
@@ -57,23 +58,27 @@ function parseSetup(text) {
     try { d = JSON.parse(text.slice(a, b + 1)); } catch (e2) { return { error: 'texte illisible (JSON invalide)' }; }
   }
   if (!d || d.hexacorde !== 1 || !Array.isArray(d.hexagrammes)) return { error: 'ce n\'est pas un setup Hexacorde' };
-  if (d.hexagrammes.length !== slots.length) return { error: `il faut ${slots.length} hexagrammes` };
-  const used = new Set(), list = [];
+  const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
+  const grille = Math.round(num(d.grille, N_MIN, N_MAX, 6));
+  if (d.hexagrammes.length > LABELS.length) return { error: `${LABELS.length} hexagrammes au plus` };
+  const used = new Set(), list = [], labels = new Set();
   for (const [i, x] of d.hexagrammes.entries()) {
-    const L = LABELS[i];
+    const L = typeof x.lettre === 'string' && x.lettre.length === 1 && LABELS.includes(x.lettre) && !labels.has(x.lettre) ? x.lettre : '#' + (i + 1);
+    const label = L[0] === '#' ? undefined : L;
+    if (label) labels.add(label);
     const pos = x.pos;
-    if (!Array.isArray(pos) || !pos.every(v => Number.isInteger(v) && v >= 0 && v < N) || pos.length !== 2)
-      return { error: `${L} : position invalide (deux entiers de 0 à ${N - 1})` };
+    if (!Array.isArray(pos) || !pos.every(v => Number.isInteger(v) && v >= 0 && v < grille) || pos.length !== 2)
+      return { error: `${L} : position invalide (deux entiers de 0 à ${grille - 1})` };
     if (used.has(pos.join())) return { error: `${L} : position déjà occupée` };
     used.add(pos.join());
     let lines = null;
-    if (typeof x.traits === 'string' && /^[01]{6}$/.test(x.traits)) lines = bits(x.traits);
+    if (typeof x.traits === 'string' && /^[01]{6,7}$/.test(x.traits)) lines = bits(x.traits);
     else if (Number.isInteger(x.numero) && HEX_LINES[x.numero]) lines = HEX_LINES[x.numero].slice();
-    if (!lines) return { error: `${L} : "traits" (6 chiffres 0 ou 1) ou "numero" (1 à 64) attendu` };
-    const initial = typeof x.depart === 'string' && /^[01]{6}$/.test(x.depart) ? bits(x.depart) : lines.slice();
+    if (!lines) return { error: `${L} : "traits" (6 ou 7 chiffres 0 ou 1) ou "numero" (1 à 64) attendu` };
+    const initial = typeof x.depart === 'string' && /^[01]{6,7}$/.test(x.depart) && x.depart.length === lines.length ? bits(x.depart) : lines.slice();
     const mode = x.gamme === undefined ? 'chromatique' : x.gamme;
     if (!SCALES[mode]) return { error: `${L} : gamme inconnue "${x.gamme}"` };
-    const canal = x.canal === undefined ? i + 1 : x.canal;
+    const canal = x.canal === undefined ? (label ? LABELS.indexOf(label) : i) % 16 + 1 : x.canal;
     if (!Number.isInteger(canal) || canal < 1 || canal > 16) return { error: `${L} : canal de 1 à 16` };
     const r = x.rotation || {};
     const sp = SPEEDS.find(v => v[2] === (r.vitesse === undefined ? 'x1' : r.vitesse));
@@ -83,17 +88,20 @@ function parseSetup(text) {
     let custom = null, customOn = false;
     if (x.notes !== undefined) {
       const n = x.notes || {};
-      const six = a => Array.isArray(a) && a.length === 6;
+      const six = a => Array.isArray(a) && a.length === lines.length;
       const inRange = v => Number.isInteger(v) && v >= 0 && v < 24;
       if (!six(n.plein) || !n.plein.every(inRange) || !six(n.brise) || !n.brise.every(v => v === null || inRange(v)))
-        return { error: `${L} : notes : "plein" et "brise" = 6 valeurs de 0 à 23 demi-tons (null = silence pour le brisé)` };
+        return { error: `${L} : notes : "plein" et "brise" = autant de valeurs que de traits (6 ou 7), de 0 de 0 à 23 demi-tons (null = silence pour le brisé)` };
       custom = n.plein.map((p, k) => ({ p, b: n.brise[k] }));
       customOn = !!n.active;
     }
-    list.push({ gx: pos[0], gy: pos[1], lines, initial, mode, channel: canal - 1, custom, customOn,
-                rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: mod6(angle / 60) });
+    // amorce : par hexagone ; l'ancien format avait un seul réglage global, pour le premier hexagone
+    const am = x.amorce !== undefined ? x.amorce : (i === 0 ? d.amorce : 0);
+    const loopOn = Number.isFinite(am) && am >= 2;
+    list.push({ label, gx: pos[0], gy: pos[1], lines, initial, mode, channel: canal - 1, custom, customOn,
+                active: x.actif !== false, loopOn, loopN: loopOn ? Math.min(128, Math.round(am)) : 24,
+                rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: modn(angle / 60, lines.length) });
   }
-  const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
   const so = d.son || {}, son = {
     wave: WAVE_GAIN[so.onde] ? so.onde : snd.wave,
     a: Math.round(num(so.a, 1, 500, snd.a)), d: Math.round(num(so.d, 10, 1000, snd.d)),
@@ -102,10 +110,9 @@ function parseSetup(text) {
     fq: num(so.q, 0.1, 20, snd.fq), fenv: num(so.env, 0, 1, snd.fenv),
   };
   return { cfg: {
-    slots: list, son,
-    pas: Math.round(num(d.pas, 80, 700, 240)), tonique: Math.round(num(d.tonique, 0, 11, 0)),
+    slots: list, son, grille,
+    pas: Math.round(num(d.pas, 80, 700, 240)), tonique: Math.round(num(d.tonique, 0, 11, 0)), octave: Math.round(num(d.octave, -3, 3, 0)),
     portee: num(d.portee, 1, 9, 2.5), mutation: !!d.mutation,
-    amorce: Number.isFinite(d.amorce) && d.amorce >= 2 ? Math.min(128, Math.round(d.amorce)) : 0,
   } };
 }
 
@@ -113,22 +120,14 @@ function applySetup(cfg) {
   silence();
   tickMs = cfg.pas; $('tempo').value = tickMs; $('tempoVal').textContent = tickMs + ' ms';
   opt.tonic = cfg.tonique; $('tonic').value = opt.tonic;
+  opt.octave = cfg.octave; $('octave').value = opt.octave;
   opt.softRange = cfg.portee; $('soft').value = opt.softRange;
   opt.mutate = cfg.mutation; $('mutate').checked = opt.mutate;
-  opt.loop = cfg.amorce > 0; $('loop').checked = opt.loop;
-  if (opt.loop) { opt.loopN = cfg.amorce; $('loopN').value = opt.loopN; }
   Object.assign(snd, cfg.son); showSound();
-  slots.forEach((s, i) => {
-    const c = cfg.slots[i];
-    Object.assign(s, { gx: c.gx, gy: c.gy, lines: c.lines, initial: c.initial, mode: c.mode, channel: c.channel,
-      rotOn: c.rotOn, rotDir: c.rotDir, rotSpeed: c.rotSpeed, rot: c.rot,
-      rotAcc: 0, rotDelta: 0, rotT0: -1e9, flash: [-99, -99, -99, -99, -99, -99] });
-    s.customOn = c.customOn;
-    if (c.custom) s.custom = c.custom; else fillCustom(s);
-    s.modeSel.value = s.mode; s.chanSel.value = s.channel; s.rotChk.checked = s.rotOn;
-    s.dirBtn.textContent = s.rotDir > 0 ? '↻' : '↺'; s.spdSel.value = s.rotSpeed;
-    drawSlot(s);                              // met aussi à jour le menu d'hexagramme
-  });
+  // on reconstruit tous les hexagones : le nombre et la taille de la grille peuvent changer
+  for (const s of slots.slice()) removeSlot(s, true);
+  setGridSize(cfg.grille);
+  for (const c of cfg.slots) addSlot({ ...c, rot: c.rot });
 }
 
 const say = msg => { $setupMsg.textContent = msg; };

@@ -42,13 +42,15 @@
     padding: 10px 12px; box-shadow: 0 6px 24px #000a; font-size: 13px; width: 290px; max-height: calc(100vh - 8px); overflow-y: auto; }
   #ctxMenu[hidden] { display: none; }
   #ctxMenu .ctitle { font-weight: 600; margin-bottom: 6px; }
-  #ctxMenu .crow { display: flex; gap: 8px; margin: 6px 0; align-items: center; }
+  #ctxMenu .crow { flex-wrap: wrap; display: flex; gap: 8px; margin: 6px 0; align-items: center; }
   #ctxMenu .cgrid { display: grid; grid-template-columns: 2.5em 1fr 1fr; gap: 4px 6px; align-items: center; margin: 6px 0; }
   #ctxMenu .cform { display: grid; grid-template-columns: auto 1fr; gap: 5px 10px; align-items: center; margin: 6px 0; }
   #ctxMenu .cform > span { color: var(--dim); }
   #ctxMenu .cform > select { width: 100%; min-width: 0; }
   #ctxMenu .cform .crow { margin: 0; }
   #ctxMenu .csep, #sound .csep { border-top: 1px solid #2c2c34; margin: 8px 0 4px; }
+  #ctxMenu option.in { color: #ffb000; font-weight: 700; }
+  #ctxMenu option.out { color: #7a7a86; }
   #ctxMenu .cgrid b { color: var(--dim); font-weight: 600; }
   #ctxMenu .cgrid span { color: var(--dim); }
   #ctxMenu select { padding: 1px 3px; min-width: 0; }

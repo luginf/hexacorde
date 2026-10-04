@@ -6,13 +6,13 @@ const PPQ = 480, STEP_TICKS = PPQ / 2, NOTE_TICKS = Math.round(STEP_TICKS * 0.9)
 let rec = null;
 
 function beginRecording() {
-  rec = { events: [], tempos: [{ step: tick, ms: tickMs }] };
+  rec = { events: [], tempos: [{ step: tick, ms: tickMs }], live: true };
 }
 function recNote(slot, midi, vel) {
-  if (rec) rec.events.push({ step: tick, slot: slot.id, ch: slot.channel, midi, vel });
+  if (rec && rec.live) rec.events.push({ step: tick, slot: slot.id, ch: slot.channel, midi, vel });
 }
 function recTempo() {
-  if (rec) rec.tempos.push({ step: tick, ms: tickMs });
+  if (rec && rec.live) rec.tempos.push({ step: tick, ms: tickMs });
 }
 
 const vlq = n => { const b = [n & 0x7f]; while ((n >>= 7) > 0) b.unshift((n & 0x7f) | 0x80); return b; };
@@ -47,7 +47,7 @@ function buildMidi(r) {
   for (const slot of slots) {
     const mine = r.events.filter(e => e.slot === slot.id);
     if (!mine.length) continue;
-    const ev = [{ t: 0, order: 0, bytes: metaText(0x03, `Hexacorde ${LABELS[slot.id]} ${slot.mode}`) }];
+    const ev = [{ t: 0, order: 0, bytes: metaText(0x03, `Hexacorde ${slot.label} ${slot.mode}`) }];
     for (const e of mine) {
       const t = (e.step - base) * STEP_TICKS;
       ev.push({ t, order: 1, bytes: [0x90 | e.ch, e.midi, e.vel] });
@@ -67,12 +67,18 @@ function download(bytes, filename, mime = 'audio/midi') {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+// horodatage pour les noms de fichier : AAAAMMJJ-HHMMSS
+function fileStamp() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+const fileBase = () => ($recName.value.trim() || 'hexacorde').replace(/[^\p{L}\p{N}_. -]+/gu, '_');
+
+// arrête l'enregistrement MIDI et télécharge le fichier ; renvoie false s'il n'y avait aucune note
 function finishRecording() {
   const r = rec;
+  if (!r || !r.events.length) return false;
   rec = null;
-  if (!r || !r.events.length) return;
-  const d = new Date(), p = n => String(n).padStart(2, '0');
-  const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-  const name = ($recName.value.trim() || 'hexacorde').replace(/[^\p{L}\p{N}_. -]+/gu, '_');
-  download(buildMidi(r), `${name}-${stamp}.mid`);
+  download(buildMidi(r), `${fileBase()}-${fileStamp()}.mid`);
+  return true;
 }

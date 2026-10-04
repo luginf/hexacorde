@@ -21,8 +21,8 @@ function frame(now) {
   for (const slot of slots) {
     // rotation animée (un pas d'horloge pour la rotation auto, 160 ms pour la manuelle)
     const u = Math.min(1, Math.max(0, (now - slot.rotT0) / slot.rotDur));
-    applyRotation(slot, 60 * (slot.rot - slot.rotDelta * (1 - u * u * (3 - 2 * u))));
-    for (let k = 0; k < 6; k++) {
+    applyRotation(slot, 360 / slot.n * (slot.rot - slot.rotDelta * (1 - u * u * (3 - 2 * u))));
+    for (let k = 0; k < slot.n; k++) {
       const f = Math.max(0, 1 - (tf - slot.flash[k]) / 2.5);
       const color = f > 0 ? (slot.lines[k] ? 'var(--yang)' : 'var(--yin)') : 'var(--ink)';
       for (const l of slot.sideEls[k]) {
@@ -34,6 +34,9 @@ function frame(now) {
     }
   }
   $status.textContent = `pas ${tick} · impulsions ${pulses.length}` +
-    (rec ? ` · REC ${rec.events.length} notes` : '');
+    (rec ? ` · MIDI ${rec.events.length} notes${rec.live ? '' : ' (arrêté)'}` : '') +
+    (arec ? ` · audio ${(arec.n / ac.sampleRate).toFixed(1)} s${arec.live ? '' : ' (arrêté)'}` : '');
+  $recSave.disabled = !(rec && rec.events.length);
+  $arecSave.disabled = !(arec && arec.n);
   requestAnimationFrame(frame);
 }
