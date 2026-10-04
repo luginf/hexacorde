@@ -16,6 +16,9 @@ Ouvrir `index.html` dans un navigateur récent (Chrome, Firefox...), puis clique
 - **Tirage** : tire au hasard les traits des six hexagrammes. **Placement au hasard** : les redispose sur la grille.
 - **Jouer / Pause** : démarre et arrête l'horloge. **Silence** : efface toutes les impulsions en cours.
 - **Panneau, un bloc par hexagone** : choisir son hexagramme (parmi les 64, avec son nom), sa gamme, son canal MIDI, régler sa rotation, ou le **Réinit.**
+- **Clic droit sur un hexagone** : menu avec tous ses réglages (hexagramme, gamme, canal MIDI, rotation, sens, vitesse, Réinit.), un cran de 60° (↺ ou ↻) et le choix de ses notes à la main (voir plus bas). Le panneau et le menu restent synchronisés.
+- **Flèche « Hexagrammes : édition »** : replie tous les blocs d'édition pour atteindre plus vite le bas du panneau (l'état est retenu). La **molette** le tourne aussi (bas = horaire, haut = antihoraire).
+- **Setup** (bloc repliable en bas du panneau) : sauvegarder et recharger toute la configuration.
 
 ## Les hexagrammes et leur nom
 
@@ -44,6 +47,10 @@ Chaque hexagramme est dessiné comme un hexagone, dont les six côtés sont ses 
 - **Tonique** : réglage global qui transpose l'ensemble.
 - **Octave** : elle dépend de la rangée de la grille, les rangées du bas sont graves et celles du haut sont aiguës.
 
+### Notes personnalisées
+
+Pour plus de variété, chaque hexagone peut avoir ses propres notes. Clic droit sur l'hexagone, case **Notes personnalisées** : pour chacun des 6 traits, on choisit la note du trait plein et celle du trait brisé, sur deux octaves (une apostrophe, comme dans « ré' », marque l'octave du dessus), ou « silence » pour le trait brisé. Modifier une note active l'option, la décocher revient à la gamme. **Reprendre la gamme** copie les notes de la gamme actuelle pour partir de là. Un trait brisé qui a une note joue doucement et envoie une impulsion douce, comme en chromatique.
+
 ### La propagation
 
 - Quand un hexagone est déclenché, il joue ses six côtés à la suite, un par pas, en partant du côté touché.
@@ -54,11 +61,34 @@ Chaque hexagramme est dessiné comme un hexagone, dont les six côtés sont ses 
 
 ### Options
 
+- **Rotation à la main** : clic droit puis ↺ / ↻, ou molette. Elle fonctionne aussi à l'arrêt.
 - **Rotation** : l'hexagone tourne par pas de 60°. Chaque trait garde sa note, mais sa direction d'envoi et le trait touché à la réception changent. Pour chaque hexagone : une case pour l'activer, un bouton ↻ / ↺ pour le **sens** (horaire ou antihoraire) et une **vitesse** : ×1 (un pas de 60° à chaque pas d'horloge), ×2 ou ×3 (deux ou trois pas de 60° par pas), ÷2, ÷3, ÷4 ou ÷8 (un pas de 60° tous les 2, 3, 4 ou 8 pas). Case « ↻ tous » pour activer la rotation partout.
 - **Mutation des traits** : une impulsion de polarité opposée au côté touché inverse ce trait (forte sur brisé, douce sur plein). L'hexagramme évolue comme dans une consultation.
 - **Amorce A tous les N pas** : relance l'hexagone A à intervalle régulier.
 - **Portée du trait brisé** : distance maximale (en cases) des impulsions douces.
 - **Pas** : durée d'un pas de l'horloge, en millisecondes.
+
+## Sauvegarder un setup
+
+Le bloc repliable **Setup** (en bas du panneau) garde la disposition, les traits, les gammes, les canaux, les rotations, les notes personnalisées et les réglages (pas, tonique, portée, mutation, amorce). Il ne garde pas les impulsions en cours, le volume ni la sortie MIDI.
+
+- **Nom** : pré-rempli avec la date et l'heure (`setup-2026-10-04_18-34-40`), mises à jour à chaque sauvegarde tant que vous ne le modifiez pas. Le setup contient aussi la date en ISO 8601.
+- **Sauver / Charger / Suppr.** : dans la mémoire du navigateur, sous ce nom.
+- **Fichier .json** et **Ouvrir...** : télécharger le setup ou en relire un depuis le disque.
+- **Texte / Copier** et **Appliquer** : écrit le setup en texte (et le copie), ou charge le texte collé dans la zone. Pratique pour l'échanger ou le garder dans une note.
+
+Le texte est un JSON lisible, un hexagramme par ligne :
+
+```
+{"hexacorde":1,"date":"2026-10-04T18:34:40+02:00","pas":240,"tonique":0,"portee":2.5,"mutation":false,"amorce":0,
+"hexagrammes": [
+  {"lettre":"A","pos":[2,4],"traits":"010000","depart":"010000","gamme":"phrygien","canal":1,"rotation":{"active":false,"sens":"horaire","vitesse":"x1","angle":0}},
+  {"lettre":"D","pos":[1,3],"traits":"000000","depart":"000000","gamme":"phrygien","canal":4,"rotation":{"active":true,"sens":"horaire","vitesse":"x1","angle":0}},
+  ...
+]}
+```
+
+On peut l'écrire ou le retoucher à la main : `pos` = colonne et ligne de 0 à 5, `traits` = 6 chiffres (1 plein, 0 brisé, trait 1 en premier) ou `"numero": 11` à la place, `vitesse` parmi `x1 x2 x3 /2 /3 /4 /8`, `angle` multiple de 60. Si le texte est invalide, rien ne change et l'erreur précise est affichée.
 
 ## Piloter un synthé externe (MIDI en direct)
 
@@ -82,10 +112,11 @@ Cocher **Enregistrer en fichier MIDI** et choisir un **Nom**. Tout ce qui sonne 
 ## À venir
 
 - Program change et bank select par canal (choisir les patchs du JV-880), clock MIDI.
-- Sauvegarde de la disposition.
 - Tirage avec lignes mobiles (second hexagramme de mutation).
 - Version uxn.
 
 ## Notes pour développeurs
+
+Le code est découpé en modules dans `src/` (`src/js/*.js`, `src/style.css`, `src/template.html`). **`index.html` est généré** : après une modification, lancer `make` (et `make check` pour vérifier la syntaxe). `make serve` sert le dossier sur `http://localhost:8000` (utile pour Web MIDI dans Firefox).
 
 Voir `CLAUDE.md` pour le détail des règles de conception, la structure du code et la façon de tester.
