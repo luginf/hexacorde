@@ -53,11 +53,12 @@ Each hexagram is drawn as a hexagon whose six sides are its six lines. The first
 
 - **Scales** (chosen per hexagon): major, natural minor, dorian, phrygian, lydian, mixolydian, major or minor pentatonic. Side `k` plays degree `k` of the scale (wrapping up an octave when the scale has fewer than 6 notes). A solid line plays the note and sends it back. A broken line is silent and sends nothing.
 - **Tonic**: a global setting that transposes everything. **Octave**: a global base octave (-3 to +3) that shifts every sound.
+- **Per hexagon**: each hexagon has its own **tonic** ("tonique globale" follows the global one) and its own **octave** (added to the global one), in its panel block and in the right-click menu.
 - **Octave by row**: it depends on the grid row; low rows are low-pitched, high rows are high-pitched.
 
 ### Custom notes
 
-For more variety, each hexagon can have its own notes. Right-click the hexagon, tick **Notes personnalisées**: for each of the 6 lines, pick the note of the solid line and of the broken line over two octaves (an apostrophe, as in "ré'", marks the octave above), or "silence" for the broken line. All 24 notes are offered; those of the hexagon's scale are shown in bright amber and the others in grey, and the tonic is marked "(tonique)". Changing a note turns the option on; unticking it goes back to the scale. **Reprendre la gamme** copies the notes of the current scale as a starting point; with a scale of 7 notes, the one without a solid line goes on a broken line, so the whole scale is present (a broken line only sounds when hit). **Mélanger l'ordre** shuffles the notes at random. With a scale, every note of the scale (including the one that had no solid line, such as the 7th degree) is redistributed: the first ones on the solid lines, the rest on random broken lines. In chromatic mode each solid/broken pair stays together. A broken line that has a note plays softly and sends a soft pulse, as in chromatic mode.
+For more variety, each hexagon can have its own notes. Right-click the hexagon, tick **Notes personnalisées**: for each of the 6 lines, pick the note of the solid line and of the broken line over two octaves (an apostrophe, as in "ré'", marks the octave above), or "silence" (for either line, solid or broken). All 24 notes are offered; those of the hexagon's scale are shown in bright amber and the others in grey, and the tonic is marked "(tonique)". Changing a note turns the option on; unticking it goes back to the scale. **Reprendre la gamme** copies the notes of the current scale as a starting point; with a scale of 7 notes, the one without a solid line goes on a broken line, so the whole scale is present (a broken line only sounds when hit). **Mélanger l'ordre** shuffles the notes at random. With a scale, every note of the scale (including the one that had no solid line, such as the 7th degree) is redistributed: the first ones on the solid lines, the rest on random broken lines. In chromatic mode each solid/broken pair stays together. A broken line that has a note plays softly and sends a soft pulse, as in chromatic mode.
 
 ### Propagation
 
@@ -74,7 +75,7 @@ For more variety, each hexagon can have its own notes. Right-click the hexagon, 
 - **Mutation of lines**: a pulse of polarity opposite to the side it hits flips that line (strong on broken, soft on solid). The hexagram evolves as in a consultation.
 - **Amorce** (priming, per hexagon, in the panel and in the right-click menu): plays a note of that hexagon every N steps.
 - **Portée du trait brisé**: maximum distance (in cells) of soft pulses.
-- **Pas**: duration of one clock step, in milliseconds.
+- **Pas**: duration of one clock step, in milliseconds. The **Tempo** field gives the same setting in BPM (one step is an eighth note, so BPM = 30000 / step in ms; 240 ms = 125 BPM) and can be edited too (43 to 375 BPM).
 - **Son interne : édition** (foldable block under "Son interne"): see the next section.
 
 ## Editing the internal sound
@@ -105,7 +106,7 @@ The text is readable JSON, one hexagram per line (keys are in French):
 ]}
 ```
 
-You can write or tweak it by hand: `octave` = base octave (-3 to 3), `traits` can have 7 digits (heptagon), `grille` = grid size (3 to 12, default 6), `pos` = column and row from 0 to `grille`-1, `actif: false` = disabled hexagon, `amorce: N` = priming every N steps, `traits` = 6 digits (1 solid, 0 broken, line 1 first) or `"numero": 11` instead, `vitesse` among `x1 x2 x3 /2 /3 /4 /8`, `angle` a multiple of 60. If the text is invalid, nothing changes and the precise error is shown.
+You can write or tweak it by hand: `octave` = base octave (-3 to 3), `traits` can have 7 digits (heptagon), `grille` = grid size (3 to 12, default 6), `pos` = column and row from 0 to `grille`-1, `actif: false` = disabled hexagon, `tonique` (0 to 11) and `octave` (-3 to 3) = the hexagon's own tonic and octave, `plein` / `brise` accept `null` = silence, `amorce: N` = priming every N steps, `traits` = 6 digits (1 solid, 0 broken, line 1 first) or `"numero": 11` instead, `vitesse` among `x1 x2 x3 /2 /3 /4 /8`, `angle` a multiple of 60. If the text is invalid, nothing changes and the precise error is shown.
 
 ## Driving an external synth (live MIDI)
 

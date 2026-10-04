@@ -34,7 +34,9 @@ function offsetOf(slot, k) {
   if (slot.customOn) return line ? slot.custom[k].p : slot.custom[k].b;
   return defaultOffset(slot, k, line);
 }
-const midiOf = (slot, off) => Math.max(0, Math.min(127, 48 + 12 * (Math.floor((5 - slot.gy) / 2) + opt.octave) + opt.tonic + off));
+const slotTonic = slot => (slot.tonic === null ? opt.tonic : slot.tonic);
+const midiOf = (slot, off) => Math.max(0, Math.min(127,
+  48 + 12 * (Math.floor((5 - slot.gy) / 2) + opt.octave + slot.octave) + slotTonic(slot) + off));
 
 // "to" est-il dans le secteur de `from` centré sur la direction ang (degrés depuis le haut, sens horaire) ?
 // secteur demi-ouvert de largeur 360 / n, donc l'horizontale exacte d'un hexagone va au secteur du bas

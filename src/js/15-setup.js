@@ -36,6 +36,7 @@ function getSetup() {
       rotation: { active: s.rotOn, sens: s.rotDir > 0 ? 'horaire' : 'antihoraire',
                   vitesse: speedCode(s.rotSpeed), angle: modn(s.rot, s.n) * 60 },
       ...(s.active ? {} : { actif: false }),
+      ...(s.tonic === null ? {} : { tonique: s.tonic }), ...(s.octave ? { octave: s.octave } : {}),
       ...(s.loopOn ? { amorce: s.loopN } : {}),
       // les notes personnalisées ne sont écrites que si elles sont actives (sinon la gamme suffit)
       ...(s.customOn ? { notes: { active: true, plein: s.custom.map(c => c.p), brise: s.custom.map(c => c.b) } } : {}),
@@ -89,17 +90,19 @@ function parseSetup(text) {
     if (x.notes !== undefined) {
       const n = x.notes || {};
       const six = a => Array.isArray(a) && a.length === lines.length;
-      const inRange = v => Number.isInteger(v) && v >= 0 && v < 24;
-      if (!six(n.plein) || !n.plein.every(inRange) || !six(n.brise) || !n.brise.every(v => v === null || inRange(v)))
-        return { error: `${L} : notes : "plein" et "brise" = autant de valeurs que de traits (6 ou 7), de 0 de 0 à 23 demi-tons (null = silence pour le brisé)` };
+      const inRange = v => Number.isInteger(v) && v >= 0 && v < 24;   // null = silence
+      if (!six(n.plein) || !n.plein.every(v => v === null || inRange(v)) || !six(n.brise) || !n.brise.every(v => v === null || inRange(v)))
+        return { error: `${L} : notes : "plein" et "brise" = autant de valeurs que de traits (6 ou 7), de 0 à 23 demi-tons (null = silence)` };
       custom = n.plein.map((p, k) => ({ p, b: n.brise[k] }));
       customOn = !!n.active;
     }
     // amorce : par hexagone ; l'ancien format avait un seul réglage global, pour le premier hexagone
+    const tonic = Number.isInteger(x.tonique) && x.tonique >= 0 && x.tonique < 12 ? x.tonique : null;
+    const oct = Number.isInteger(x.octave) ? Math.max(-3, Math.min(3, x.octave)) : 0;
     const am = x.amorce !== undefined ? x.amorce : (i === 0 ? d.amorce : 0);
     const loopOn = Number.isFinite(am) && am >= 2;
     list.push({ label, gx: pos[0], gy: pos[1], lines, initial, mode, channel: canal - 1, custom, customOn,
-                active: x.actif !== false, loopOn, loopN: loopOn ? Math.min(128, Math.round(am)) : 24,
+                active: x.actif !== false, tonic, octave: oct, loopOn, loopN: loopOn ? Math.min(128, Math.round(am)) : 24,
                 rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: modn(angle / 60, lines.length) });
   }
   const so = d.son || {}, son = {
@@ -118,7 +121,7 @@ function parseSetup(text) {
 
 function applySetup(cfg) {
   silence();
-  tickMs = cfg.pas; $('tempo').value = tickMs; $('tempoVal').textContent = tickMs + ' ms';
+  setTempo(cfg.pas);
   opt.tonic = cfg.tonique; $('tonic').value = opt.tonic;
   opt.octave = cfg.octave; $('octave').value = opt.octave;
   opt.softRange = cfg.portee; $('soft').value = opt.softRange;

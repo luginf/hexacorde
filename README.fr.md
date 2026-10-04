@@ -53,11 +53,12 @@ Chaque hexagramme est dessiné comme un hexagone, dont les six côtés sont ses 
 
 - **Gammes** (au choix pour chaque hexagone) : majeur, mineur naturel, dorien, phrygien, lydien, mixolydien, pentatonique majeure ou mineure. Le côté `k` joue le degré `k` de la gamme (on repart à l'octave quand elle a moins de 6 notes). Un trait plein joue la note et la renvoie. Un trait brisé fait silence et ne renvoie rien.
 - **Tonique** : réglage global qui transpose l'ensemble. **Octave** : octave de base globale (-3 à +3) qui décale tous les sons.
+- **Par hexagone** : chaque hexagone a sa **tonique** (« tonique globale » suit le réglage global) et son **octave** (en plus de l'octave globale), dans son bloc du panneau et dans le menu du clic droit.
 - **Octave par rangée** : elle dépend de la rangée de la grille, les rangées du bas sont graves et celles du haut sont aiguës.
 
 ### Notes personnalisées
 
-Pour plus de variété, chaque hexagone peut avoir ses propres notes. Clic droit sur l'hexagone, case **Notes personnalisées** : pour chacun des 6 traits, on choisit la note du trait plein et celle du trait brisé, sur deux octaves (une apostrophe, comme dans « ré' », marque l'octave du dessus), ou « silence » pour le trait brisé. Les 24 notes sont proposées ; celles de la gamme de l'hexagone sont en ambre vif, les autres en gris, et la tonique est marquée « (tonique) ». Modifier une note active l'option, la décocher revient à la gamme. **Reprendre la gamme** copie les notes de la gamme actuelle pour partir de là ; avec une gamme de 7 notes, celle qui n'a pas de trait plein va sur un trait brisé, pour que toute la gamme soit présente (un brisé ne sonne que s'il est touché). **Mélanger l'ordre** mélange les notes au hasard. Avec une gamme, toutes les notes de la gamme (y compris celle qui n'avait pas de trait plein, comme le 7e degré) sont redistribuées : les premières sur les traits pleins, les autres sur des traits brisés au hasard. En chromatique, chaque paire plein / brisé reste ensemble. Un trait brisé qui a une note joue doucement et envoie une impulsion douce, comme en chromatique.
+Pour plus de variété, chaque hexagone peut avoir ses propres notes. Clic droit sur l'hexagone, case **Notes personnalisées** : pour chacun des 6 traits, on choisit la note du trait plein et celle du trait brisé, sur deux octaves (une apostrophe, comme dans « ré' », marque l'octave du dessus), ou « silence » (pour le trait plein comme pour le brisé). Les 24 notes sont proposées ; celles de la gamme de l'hexagone sont en ambre vif, les autres en gris, et la tonique est marquée « (tonique) ». Modifier une note active l'option, la décocher revient à la gamme. **Reprendre la gamme** copie les notes de la gamme actuelle pour partir de là ; avec une gamme de 7 notes, celle qui n'a pas de trait plein va sur un trait brisé, pour que toute la gamme soit présente (un brisé ne sonne que s'il est touché). **Mélanger l'ordre** mélange les notes au hasard. Avec une gamme, toutes les notes de la gamme (y compris celle qui n'avait pas de trait plein, comme le 7e degré) sont redistribuées : les premières sur les traits pleins, les autres sur des traits brisés au hasard. En chromatique, chaque paire plein / brisé reste ensemble. Un trait brisé qui a une note joue doucement et envoie une impulsion douce, comme en chromatique.
 
 ### La propagation
 
@@ -74,7 +75,7 @@ Pour plus de variété, chaque hexagone peut avoir ses propres notes. Clic droit
 - **Mutation des traits** : une impulsion de polarité opposée au côté touché inverse ce trait (forte sur brisé, douce sur plein). L'hexagramme évolue comme dans une consultation.
 - **Amorce** (par hexagone, dans le panneau et le menu du clic droit) : joue une note de cet hexagone tous les N pas.
 - **Portée du trait brisé** : distance maximale (en cases) des impulsions douces.
-- **Pas** : durée d'un pas de l'horloge, en millisecondes.
+- **Pas** : durée d'un pas de l'horloge, en millisecondes. Le champ **Tempo** donne le même réglage en BPM (un pas est une croche, donc BPM = 30000 / pas en ms ; 240 ms = 125 BPM) et peut aussi être modifié (de 43 à 375 BPM).
 - **Son interne : édition** (bloc repliable sous « Son interne ») : voir la section suivante.
 
 ## Éditer le son interne
@@ -105,7 +106,7 @@ Le texte est un JSON lisible, un hexagramme par ligne :
 ]}
 ```
 
-On peut l'écrire ou le retoucher à la main : `grille` = taille de la grille (3 à 12, 6 par défaut), `octave` = octave de base (-3 à 3), `traits` peut avoir 7 chiffres (heptagone), `pos` = colonne et ligne de 0 à `grille`-1, `actif: false` = hexagone désactivé, `amorce: N` = amorce tous les N pas, `traits` = 6 chiffres (1 plein, 0 brisé, trait 1 en premier) ou `"numero": 11` à la place, `vitesse` parmi `x1 x2 x3 /2 /3 /4 /8`, `angle` multiple de 60. Si le texte est invalide, rien ne change et l'erreur précise est affichée.
+On peut l'écrire ou le retoucher à la main : `grille` = taille de la grille (3 à 12, 6 par défaut), `octave` = octave de base (-3 à 3), `traits` peut avoir 7 chiffres (heptagone), `pos` = colonne et ligne de 0 à `grille`-1, `actif: false` = hexagone désactivé, `tonique` (0 à 11) et `octave` (-3 à 3) = tonique et octave propres à l'hexagone, `plein` / `brise` acceptent `null` = silence, `amorce: N` = amorce tous les N pas, `traits` = 6 chiffres (1 plein, 0 brisé, trait 1 en premier) ou `"numero": 11` à la place, `vitesse` parmi `x1 x2 x3 /2 /3 /4 /8`, `angle` multiple de 60. Si le texte est invalide, rien ne change et l'erreur précise est affichée.
 
 ## Piloter un synthé externe (MIDI en direct)
 

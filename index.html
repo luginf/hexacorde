@@ -101,6 +101,8 @@
   <div class="row"><label style="flex:1">Pas
     <input id="tempo" type="range" min="80" max="700" step="10" value="240"></label>
     <span id="tempoVal">240 ms</span></div>
+  <div class="row"><label title="Un pas = une croche : BPM = 30000 / pas en ms">Tempo
+    <input id="bpm" type="number" min="43" max="375" step="1" value="125"> BPM</label></div>
   <div class="row"><label style="flex:1">Volume
     <input id="vol" type="range" min="0" max="1" step="0.01" value="0.5"></label></div>
 
@@ -290,6 +292,7 @@ function makeSlot(c) {
     id: slotSeq++, label, gx: c.gx, gy: c.gy, lines: c.lines.slice(), n: c.lines.length,   // n = 6 ou 7 côtés
     initial: (c.initial || c.lines).slice(),     // forme de départ, pour la réinitialisation
     mode: c.mode || 'chromatique', channel: c.channel === undefined ? LABELS.indexOf(label) % 16 : c.channel,
+    tonic: c.tonic === undefined ? null : c.tonic, octave: c.octave || 0,   // tonique propre (null = globale), octave en plus
     active: c.active !== false,                  // inactif : grisé, ne joue pas, ne reçoit rien
     loopOn: !!c.loopOn, loopN: c.loopN || 24,    // amorce d'une note tous les loopN pas
     customOn: !!c.customOn,                      // notes personnalisées
@@ -348,7 +351,9 @@ function offsetOf(slot, k) {
   if (slot.customOn) return line ? slot.custom[k].p : slot.custom[k].b;
   return defaultOffset(slot, k, line);
 }
-const midiOf = (slot, off) => Math.max(0, Math.min(127, 48 + 12 * (Math.floor((5 - slot.gy) / 2) + opt.octave) + opt.tonic + off));
+const slotTonic = slot => (slot.tonic === null ? opt.tonic : slot.tonic);
+const midiOf = (slot, off) => Math.max(0, Math.min(127,
+  48 + 12 * (Math.floor((5 - slot.gy) / 2) + opt.octave + slot.octave) + slotTonic(slot) + off));
 
 // "to" est-il dans le secteur de `from` centré sur la direction ang (degrés depuis le haut, sens horaire) ?
 // secteur demi-ouvert de largeur 360 / n, donc l'horizontale exacte d'un hexagone va au secteur du bas
@@ -750,7 +755,7 @@ function drawSlot(slot) {
       'font-size': 8.5, fill: 'var(--dim)', 'pointer-events': 'none',
     }, g);
     const off = offsetOf(slot, k);
-    t.textContent = off === null ? '·' : NAMES[(opt.tonic + off) % 12] + (off >= 12 ? "'" : '');
+    t.textContent = off === null ? '·' : NAMES[(slotTonic(slot) + off) % 12] + (off >= 12 ? "'" : '');
     slot.labelEls.push(t);
   }
   applyRotation(slot, 360 / n * slot.rot);
@@ -937,11 +942,17 @@ const $recSave = $('recSave'), $arecSave = $('arecSave');
 
 $play.addEventListener('click', () => running ? stop() : start());
 $('silence').addEventListener('click', silence);
-$('tempo').addEventListener('input', e => {
-  tickMs = +e.target.value;
+// un pas = une croche, donc BPM (noires par minute) = 30000 / pas en ms
+const msToBpm = ms => Math.round(30000 / ms);
+function setTempo(ms) {
+  tickMs = Math.max(80, Math.min(700, Math.round(ms)));
+  $('tempo').value = tickMs;
   $('tempoVal').textContent = tickMs + ' ms';
+  $('bpm').value = msToBpm(tickMs);
   recTempo();
-});
+}
+$('tempo').addEventListener('input', e => setTempo(+e.target.value));
+$('bpm').addEventListener('change', e => { if (+e.target.value > 0) setTempo(30000 / +e.target.value); else setTempo(tickMs); });
 $vol.addEventListener('input', e => { if (master) master.gain.value = +e.target.value; });
 $('soft').addEventListener('input', e => { opt.softRange = Math.max(1, +e.target.value || 1); });
 $('mutate').addEventListener('change', e => { opt.mutate = e.target.checked; });
@@ -968,6 +979,8 @@ hexEdit.addEventListener('toggle', () => {
 });
 const hexOptions = Array.from({ length: 64 }, (_, i) => `<option value="${i + 1}">${hexLabel(i + 1)}</option>`).join('');
 const chanOptions = Array.from({ length: 16 }, (_, i) => `<option value="${i}">${i + 1}</option>`).join('');
+const tonicOptions = '<option value="">tonique globale</option>' + NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+const octOptions = [-3, -2, -1, 0, 1, 2, 3].map(o => `<option value="${o}">${o > 0 ? '+' + o : o}</option>`).join('');
 const SPEEDS = [[0.125, '÷8', '/8'], [0.25, '÷4', '/4'], [1 / 3, '÷3', '/3'], [0.5, '÷2', '/2'], [1, '×1', 'x1'], [2, '×2', 'x2'], [3, '×3', 'x3']];
 // Réglages d'un hexagone, communs au panneau et au menu du clic droit : chaque fonction met à jour
 // l'état ET les contrôles du panneau, pour que les deux interfaces restent synchronisées.
@@ -977,6 +990,13 @@ function setRotOn(slot, on) { slot.rotOn = on; slot.rotChk.checked = on; }
 function setRotDir(slot, dir) { slot.rotDir = dir; slot.dirBtn.textContent = dir > 0 ? '↻' : '↺'; }
 function setRotSpeed(slot, v) { slot.rotSpeed = v; slot.rotAcc = 0; slot.spdSel.value = v; }
 
+// tonique propre à l'hexagone ('' = celle du réglage global) et octave en plus de l'octave globale
+function setTonic(slot, v) {
+  slot.tonic = v === '' || v === null ? null : +v;
+  slot.tonicSel.value = slot.tonic === null ? '' : slot.tonic;
+  drawSlot(slot);
+}
+function setOctave(slot, o) { slot.octave = o; slot.octSel.value = o; }
 function setActive(slot, on) {
   slot.active = on; slot.actChk.checked = on;
   if (!on) { slot.ph = null; pulses = pulses.filter(p => p.target !== slot); midiPanic(); }
@@ -1018,6 +1038,10 @@ function buildSlotPanel(slot) {
       <select class="scale" title="Gamme">${scaleOptions()}</select>
       <select class="chan" title="Canal MIDI">${chanOptions}</select></div>
     <div class="row rot">
+      <select class="stonic" title="Tonique de cet hexagone">${tonicOptions}</select>
+      <select class="soct" title="Octave de cet hexagone (en plus de l'octave globale)">${octOptions}</select>
+    </div>
+    <div class="row rot">
       <label title="Faire tourner cet hexagone"><input class="rotOn" type="checkbox"> rot.</label>
       <button class="dir" title="Sens de rotation">↻</button>
       <select class="spd" title="Vitesse de rotation">${SPEEDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
@@ -1041,6 +1065,11 @@ function buildSlotPanel(slot) {
   slot.modeSel = q('.scale');
   slot.modeSel.value = slot.mode;
   slot.modeSel.addEventListener('change', () => setMode(slot, slot.modeSel.value));
+
+  slot.tonicSel = q('.stonic'); slot.tonicSel.value = slot.tonic === null ? '' : slot.tonic;
+  slot.tonicSel.addEventListener('change', () => setTonic(slot, slot.tonicSel.value));
+  slot.octSel = q('.soct'); slot.octSel.value = slot.octave;
+  slot.octSel.addEventListener('change', () => setOctave(slot, +slot.octSel.value));
 
   slot.chanSel = q('.chan');
   slot.chanSel.value = slot.channel;
@@ -1208,6 +1237,7 @@ function getSetup() {
       rotation: { active: s.rotOn, sens: s.rotDir > 0 ? 'horaire' : 'antihoraire',
                   vitesse: speedCode(s.rotSpeed), angle: modn(s.rot, s.n) * 60 },
       ...(s.active ? {} : { actif: false }),
+      ...(s.tonic === null ? {} : { tonique: s.tonic }), ...(s.octave ? { octave: s.octave } : {}),
       ...(s.loopOn ? { amorce: s.loopN } : {}),
       // les notes personnalisées ne sont écrites que si elles sont actives (sinon la gamme suffit)
       ...(s.customOn ? { notes: { active: true, plein: s.custom.map(c => c.p), brise: s.custom.map(c => c.b) } } : {}),
@@ -1261,17 +1291,19 @@ function parseSetup(text) {
     if (x.notes !== undefined) {
       const n = x.notes || {};
       const six = a => Array.isArray(a) && a.length === lines.length;
-      const inRange = v => Number.isInteger(v) && v >= 0 && v < 24;
-      if (!six(n.plein) || !n.plein.every(inRange) || !six(n.brise) || !n.brise.every(v => v === null || inRange(v)))
-        return { error: `${L} : notes : "plein" et "brise" = autant de valeurs que de traits (6 ou 7), de 0 de 0 à 23 demi-tons (null = silence pour le brisé)` };
+      const inRange = v => Number.isInteger(v) && v >= 0 && v < 24;   // null = silence
+      if (!six(n.plein) || !n.plein.every(v => v === null || inRange(v)) || !six(n.brise) || !n.brise.every(v => v === null || inRange(v)))
+        return { error: `${L} : notes : "plein" et "brise" = autant de valeurs que de traits (6 ou 7), de 0 à 23 demi-tons (null = silence)` };
       custom = n.plein.map((p, k) => ({ p, b: n.brise[k] }));
       customOn = !!n.active;
     }
     // amorce : par hexagone ; l'ancien format avait un seul réglage global, pour le premier hexagone
+    const tonic = Number.isInteger(x.tonique) && x.tonique >= 0 && x.tonique < 12 ? x.tonique : null;
+    const oct = Number.isInteger(x.octave) ? Math.max(-3, Math.min(3, x.octave)) : 0;
     const am = x.amorce !== undefined ? x.amorce : (i === 0 ? d.amorce : 0);
     const loopOn = Number.isFinite(am) && am >= 2;
     list.push({ label, gx: pos[0], gy: pos[1], lines, initial, mode, channel: canal - 1, custom, customOn,
-                active: x.actif !== false, loopOn, loopN: loopOn ? Math.min(128, Math.round(am)) : 24,
+                active: x.actif !== false, tonic, octave: oct, loopOn, loopN: loopOn ? Math.min(128, Math.round(am)) : 24,
                 rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: modn(angle / 60, lines.length) });
   }
   const so = d.son || {}, son = {
@@ -1290,7 +1322,7 @@ function parseSetup(text) {
 
 function applySetup(cfg) {
   silence();
-  tickMs = cfg.pas; $('tempo').value = tickMs; $('tempoVal').textContent = tickMs + ' ms';
+  setTempo(cfg.pas);
   opt.tonic = cfg.tonique; $('tonic').value = opt.tonic;
   opt.octave = cfg.octave; $('octave').value = opt.octave;
   opt.softRange = cfg.portee; $('soft').value = opt.softRange;
@@ -1379,11 +1411,13 @@ document.body.appendChild(menu);
 // 24 notes proposées ; celles de la gamme de l'hexagone sont en couleur vive (classe `in`), les autres
 // en gris (classe `out`), et la tonique est marquée
 const noteOpts = (slot, withSilence, sel) => {
+  if (sel === undefined) sel = null;
   const steps = scaleSteps(slot);
   let h = withSilence ? `<option value=""${sel === null ? ' selected' : ''}>· silence</option>` : '';
   for (let i = 0; i < 24; i++) {
     const cls = !steps || steps.includes(i % 12) ? 'in' : 'out';
-    h += `<option class="${cls}" value="${i}"${sel === i ? ' selected' : ''}>${NAMES[(opt.tonic + i) % 12]}${i >= 12 ? "'" : ''}${i % 12 === 0 ? ' (tonique)' : ''}</option>`;
+    const st = cls === 'in' ? 'color:#ffb000;font-weight:700' : 'color:#7a7a86';
+    h += `<option class="${cls}" style="${st}" value="${i}"${sel === i ? ' selected' : ''}>${steps && cls === 'in' ? '● ' : ''}${NAMES[(slotTonic(slot) + i) % 12]}${i >= 12 ? "'" : ''}${i % 12 === 0 ? ' (tonique)' : ''}</option>`;
   }
   return h;
 };
@@ -1397,9 +1431,9 @@ function shuffleCustom(slot) {
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   if (!SCALES[slot.mode].steps) shuffle(c);
   else {
-    const pool = shuffle(c.flatMap(x => (x.b === null ? [x.p] : [x.p, x.b])));
+    const pool = shuffle(c.flatMap(x => [x.p, x.b]).filter(v => v !== null));
     const where = shuffle(Array.from({ length: n }, (_, k) => k));
-    c.forEach((x, k) => { x.p = pool[k]; x.b = null; });
+    c.forEach((x, k) => { x.p = k < pool.length ? pool[k] : null; x.b = null; });
     pool.slice(n).forEach((v, i) => { c[where[i]].b = v; });
   }
   slot.customOn = true;
@@ -1414,6 +1448,8 @@ function openMenu(slot, x, y) {
       <span>Hexagramme</span><select id="mHex">${hexOptions}</select>
       <span>Gamme</span><select id="mMode">${scaleOptions()}</select>
       <span>Canal MIDI</span><select id="mChan">${chanOptions}</select>
+      <span>Tonique</span><select id="mTonic">${tonicOptions}</select>
+      <span>Octave</span><select id="mOct">${octOptions}</select>
       <span>Rotation</span>
       <div class="crow"><label><input type="checkbox" id="mRot"> active</label>
         <button id="mDir" title="Sens de rotation">↻</button>
@@ -1429,9 +1465,9 @@ function openMenu(slot, x, y) {
     </div>
     <div class="csep"></div>
     <label class="crow"><input type="checkbox" id="cOn"${slot.customOn ? ' checked' : ''}> Notes personnalisées</label>
-    <div class="hint">Gamme ${SCALES[slot.mode].label}, tonique ${NAMES[opt.tonic]}</div>
+    <div class="hint">Gamme ${SCALES[slot.mode].label}, tonique ${NAMES[slotTonic(slot)]}</div>
     <div class="cgrid"><b>trait</b><b>plein</b><b>brisé</b>${Array.from({ length: slot.n }, (_, k) => k).map(k =>
-      `<span>${k + 1}</span><select data-k="${k}" data-w="p">${noteOpts(slot, false, slot.custom[k].p)}</select>` +
+      `<span>${k + 1}</span><select data-k="${k}" data-w="p">${noteOpts(slot, true, slot.custom[k].p)}</select>` +
       `<select data-k="${k}" data-w="b">${noteOpts(slot, true, slot.custom[k].b)}</select>`).join('')}</div>
     <div class="crow"><button id="cFill" title="Copie les notes de la gamme actuelle">Reprendre la gamme</button>
       <button id="cShuffle" title="Change au hasard l'ordre des notes entre les traits, la note en trop de la gamme comprise">Mélanger l'ordre</button></div>
@@ -1447,6 +1483,10 @@ function openMenu(slot, x, y) {
   q('#mHex').addEventListener('change', e => { setHexagram(slot, +e.target.value); reopen(); });
   q('#mMode').value = slot.mode;
   q('#mMode').addEventListener('change', e => { setMode(slot, e.target.value); reopen(); });   // les notes proposées suivent la gamme
+  q('#mTonic').value = slot.tonic === null ? '' : slot.tonic;
+  q('#mTonic').addEventListener('change', e => { setTonic(slot, e.target.value); reopen(); });
+  q('#mOct').value = slot.octave;
+  q('#mOct').addEventListener('change', e => setOctave(slot, +e.target.value));
   q('#mChan').value = slot.channel;
   q('#mChan').addEventListener('change', e => setChannel(slot, +e.target.value));
   q('#mRot').checked = slot.rotOn;
@@ -1471,7 +1511,11 @@ function openMenu(slot, x, y) {
   // notes personnalisées
   const on = q('#cOn');
   on.addEventListener('change', () => { slot.customOn = on.checked; drawSlot(slot); });
+  // le sélecteur fermé prend la couleur de la note choisie (ambre = dans la gamme)
+  const tint = sel => { const o = sel.selectedOptions[0]; sel.style.color = o && o.classList.contains('in') ? '#ffb000' : o && o.classList.contains('out') ? '#9a9aa6' : ''; };
+  menu.querySelectorAll('select[data-k]').forEach(tint);
   for (const sel of menu.querySelectorAll('select[data-k]')) sel.addEventListener('change', () => {
+    tint(sel);
     const c = slot.custom[+sel.dataset.k];
     c[sel.dataset.w] = sel.value === '' ? null : +sel.value;
     slot.customOn = true; on.checked = true;     // modifier une note active l'option

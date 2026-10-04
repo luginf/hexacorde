@@ -100,7 +100,7 @@ function drawSlot(slot) {
       'font-size': 8.5, fill: 'var(--dim)', 'pointer-events': 'none',
     }, g);
     const off = offsetOf(slot, k);
-    t.textContent = off === null ? '·' : NAMES[(opt.tonic + off) % 12] + (off >= 12 ? "'" : '');
+    t.textContent = off === null ? '·' : NAMES[(slotTonic(slot) + off) % 12] + (off >= 12 ? "'" : '');
     slot.labelEls.push(t);
   }
   applyRotation(slot, 360 / n * slot.rot);

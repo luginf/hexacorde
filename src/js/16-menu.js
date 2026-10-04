@@ -6,11 +6,13 @@ document.body.appendChild(menu);
 // 24 notes proposées ; celles de la gamme de l'hexagone sont en couleur vive (classe `in`), les autres
 // en gris (classe `out`), et la tonique est marquée
 const noteOpts = (slot, withSilence, sel) => {
+  if (sel === undefined) sel = null;
   const steps = scaleSteps(slot);
   let h = withSilence ? `<option value=""${sel === null ? ' selected' : ''}>· silence</option>` : '';
   for (let i = 0; i < 24; i++) {
     const cls = !steps || steps.includes(i % 12) ? 'in' : 'out';
-    h += `<option class="${cls}" value="${i}"${sel === i ? ' selected' : ''}>${NAMES[(opt.tonic + i) % 12]}${i >= 12 ? "'" : ''}${i % 12 === 0 ? ' (tonique)' : ''}</option>`;
+    const st = cls === 'in' ? 'color:#ffb000;font-weight:700' : 'color:#7a7a86';
+    h += `<option class="${cls}" style="${st}" value="${i}"${sel === i ? ' selected' : ''}>${steps && cls === 'in' ? '● ' : ''}${NAMES[(slotTonic(slot) + i) % 12]}${i >= 12 ? "'" : ''}${i % 12 === 0 ? ' (tonique)' : ''}</option>`;
   }
   return h;
 };
@@ -24,9 +26,9 @@ function shuffleCustom(slot) {
   const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   if (!SCALES[slot.mode].steps) shuffle(c);
   else {
-    const pool = shuffle(c.flatMap(x => (x.b === null ? [x.p] : [x.p, x.b])));
+    const pool = shuffle(c.flatMap(x => [x.p, x.b]).filter(v => v !== null));
     const where = shuffle(Array.from({ length: n }, (_, k) => k));
-    c.forEach((x, k) => { x.p = pool[k]; x.b = null; });
+    c.forEach((x, k) => { x.p = k < pool.length ? pool[k] : null; x.b = null; });
     pool.slice(n).forEach((v, i) => { c[where[i]].b = v; });
   }
   slot.customOn = true;
@@ -41,6 +43,8 @@ function openMenu(slot, x, y) {
       <span>Hexagramme</span><select id="mHex">${hexOptions}</select>
       <span>Gamme</span><select id="mMode">${scaleOptions()}</select>
       <span>Canal MIDI</span><select id="mChan">${chanOptions}</select>
+      <span>Tonique</span><select id="mTonic">${tonicOptions}</select>
+      <span>Octave</span><select id="mOct">${octOptions}</select>
       <span>Rotation</span>
       <div class="crow"><label><input type="checkbox" id="mRot"> active</label>
         <button id="mDir" title="Sens de rotation">↻</button>
@@ -56,9 +60,9 @@ function openMenu(slot, x, y) {
     </div>
     <div class="csep"></div>
     <label class="crow"><input type="checkbox" id="cOn"${slot.customOn ? ' checked' : ''}> Notes personnalisées</label>
-    <div class="hint">Gamme ${SCALES[slot.mode].label}, tonique ${NAMES[opt.tonic]}</div>
+    <div class="hint">Gamme ${SCALES[slot.mode].label}, tonique ${NAMES[slotTonic(slot)]}</div>
     <div class="cgrid"><b>trait</b><b>plein</b><b>brisé</b>${Array.from({ length: slot.n }, (_, k) => k).map(k =>
-      `<span>${k + 1}</span><select data-k="${k}" data-w="p">${noteOpts(slot, false, slot.custom[k].p)}</select>` +
+      `<span>${k + 1}</span><select data-k="${k}" data-w="p">${noteOpts(slot, true, slot.custom[k].p)}</select>` +
       `<select data-k="${k}" data-w="b">${noteOpts(slot, true, slot.custom[k].b)}</select>`).join('')}</div>
     <div class="crow"><button id="cFill" title="Copie les notes de la gamme actuelle">Reprendre la gamme</button>
       <button id="cShuffle" title="Change au hasard l'ordre des notes entre les traits, la note en trop de la gamme comprise">Mélanger l'ordre</button></div>
@@ -74,6 +78,10 @@ function openMenu(slot, x, y) {
   q('#mHex').addEventListener('change', e => { setHexagram(slot, +e.target.value); reopen(); });
   q('#mMode').value = slot.mode;
   q('#mMode').addEventListener('change', e => { setMode(slot, e.target.value); reopen(); });   // les notes proposées suivent la gamme
+  q('#mTonic').value = slot.tonic === null ? '' : slot.tonic;
+  q('#mTonic').addEventListener('change', e => { setTonic(slot, e.target.value); reopen(); });
+  q('#mOct').value = slot.octave;
+  q('#mOct').addEventListener('change', e => setOctave(slot, +e.target.value));
   q('#mChan').value = slot.channel;
   q('#mChan').addEventListener('change', e => setChannel(slot, +e.target.value));
   q('#mRot').checked = slot.rotOn;
@@ -98,7 +106,11 @@ function openMenu(slot, x, y) {
   // notes personnalisées
   const on = q('#cOn');
   on.addEventListener('change', () => { slot.customOn = on.checked; drawSlot(slot); });
+  // le sélecteur fermé prend la couleur de la note choisie (ambre = dans la gamme)
+  const tint = sel => { const o = sel.selectedOptions[0]; sel.style.color = o && o.classList.contains('in') ? '#ffb000' : o && o.classList.contains('out') ? '#9a9aa6' : ''; };
+  menu.querySelectorAll('select[data-k]').forEach(tint);
   for (const sel of menu.querySelectorAll('select[data-k]')) sel.addEventListener('change', () => {
+    tint(sel);
     const c = slot.custom[+sel.dataset.k];
     c[sel.dataset.w] = sel.value === '' ? null : +sel.value;
     slot.customOn = true; on.checked = true;     // modifier une note active l'option

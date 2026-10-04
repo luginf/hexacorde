@@ -12,6 +12,7 @@ function makeSlot(c) {
     id: slotSeq++, label, gx: c.gx, gy: c.gy, lines: c.lines.slice(), n: c.lines.length,   // n = 6 ou 7 côtés
     initial: (c.initial || c.lines).slice(),     // forme de départ, pour la réinitialisation
     mode: c.mode || 'chromatique', channel: c.channel === undefined ? LABELS.indexOf(label) % 16 : c.channel,
+    tonic: c.tonic === undefined ? null : c.tonic, octave: c.octave || 0,   // tonique propre (null = globale), octave en plus
     active: c.active !== false,                  // inactif : grisé, ne joue pas, ne reçoit rien
     loopOn: !!c.loopOn, loopN: c.loopN || 24,    // amorce d'une note tous les loopN pas
     customOn: !!c.customOn,                      // notes personnalisées

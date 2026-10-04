@@ -7,11 +7,17 @@ const $recSave = $('recSave'), $arecSave = $('arecSave');
 
 $play.addEventListener('click', () => running ? stop() : start());
 $('silence').addEventListener('click', silence);
-$('tempo').addEventListener('input', e => {
-  tickMs = +e.target.value;
+// un pas = une croche, donc BPM (noires par minute) = 30000 / pas en ms
+const msToBpm = ms => Math.round(30000 / ms);
+function setTempo(ms) {
+  tickMs = Math.max(80, Math.min(700, Math.round(ms)));
+  $('tempo').value = tickMs;
   $('tempoVal').textContent = tickMs + ' ms';
+  $('bpm').value = msToBpm(tickMs);
   recTempo();
-});
+}
+$('tempo').addEventListener('input', e => setTempo(+e.target.value));
+$('bpm').addEventListener('change', e => { if (+e.target.value > 0) setTempo(30000 / +e.target.value); else setTempo(tickMs); });
 $vol.addEventListener('input', e => { if (master) master.gain.value = +e.target.value; });
 $('soft').addEventListener('input', e => { opt.softRange = Math.max(1, +e.target.value || 1); });
 $('mutate').addEventListener('change', e => { opt.mutate = e.target.checked; });
@@ -38,6 +44,8 @@ hexEdit.addEventListener('toggle', () => {
 });
 const hexOptions = Array.from({ length: 64 }, (_, i) => `<option value="${i + 1}">${hexLabel(i + 1)}</option>`).join('');
 const chanOptions = Array.from({ length: 16 }, (_, i) => `<option value="${i}">${i + 1}</option>`).join('');
+const tonicOptions = '<option value="">tonique globale</option>' + NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+const octOptions = [-3, -2, -1, 0, 1, 2, 3].map(o => `<option value="${o}">${o > 0 ? '+' + o : o}</option>`).join('');
 const SPEEDS = [[0.125, '÷8', '/8'], [0.25, '÷4', '/4'], [1 / 3, '÷3', '/3'], [0.5, '÷2', '/2'], [1, '×1', 'x1'], [2, '×2', 'x2'], [3, '×3', 'x3']];
 // Réglages d'un hexagone, communs au panneau et au menu du clic droit : chaque fonction met à jour
 // l'état ET les contrôles du panneau, pour que les deux interfaces restent synchronisées.
@@ -47,6 +55,13 @@ function setRotOn(slot, on) { slot.rotOn = on; slot.rotChk.checked = on; }
 function setRotDir(slot, dir) { slot.rotDir = dir; slot.dirBtn.textContent = dir > 0 ? '↻' : '↺'; }
 function setRotSpeed(slot, v) { slot.rotSpeed = v; slot.rotAcc = 0; slot.spdSel.value = v; }
 
+// tonique propre à l'hexagone ('' = celle du réglage global) et octave en plus de l'octave globale
+function setTonic(slot, v) {
+  slot.tonic = v === '' || v === null ? null : +v;
+  slot.tonicSel.value = slot.tonic === null ? '' : slot.tonic;
+  drawSlot(slot);
+}
+function setOctave(slot, o) { slot.octave = o; slot.octSel.value = o; }
 function setActive(slot, on) {
   slot.active = on; slot.actChk.checked = on;
   if (!on) { slot.ph = null; pulses = pulses.filter(p => p.target !== slot); midiPanic(); }
@@ -88,6 +103,10 @@ function buildSlotPanel(slot) {
       <select class="scale" title="Gamme">${scaleOptions()}</select>
       <select class="chan" title="Canal MIDI">${chanOptions}</select></div>
     <div class="row rot">
+      <select class="stonic" title="Tonique de cet hexagone">${tonicOptions}</select>
+      <select class="soct" title="Octave de cet hexagone (en plus de l'octave globale)">${octOptions}</select>
+    </div>
+    <div class="row rot">
       <label title="Faire tourner cet hexagone"><input class="rotOn" type="checkbox"> rot.</label>
       <button class="dir" title="Sens de rotation">↻</button>
       <select class="spd" title="Vitesse de rotation">${SPEEDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
@@ -111,6 +130,11 @@ function buildSlotPanel(slot) {
   slot.modeSel = q('.scale');
   slot.modeSel.value = slot.mode;
   slot.modeSel.addEventListener('change', () => setMode(slot, slot.modeSel.value));
+
+  slot.tonicSel = q('.stonic'); slot.tonicSel.value = slot.tonic === null ? '' : slot.tonic;
+  slot.tonicSel.addEventListener('change', () => setTonic(slot, slot.tonicSel.value));
+  slot.octSel = q('.soct'); slot.octSel.value = slot.octave;
+  slot.octSel.addEventListener('change', () => setOctave(slot, +slot.octSel.value));
 
   slot.chanSel = q('.chan');
   slot.chanSel.value = slot.channel;
