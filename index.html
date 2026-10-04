@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hexacorde</title>
+<style>
+  :root {
+    --bg: #111114;
+    --panel: #1a1a1f;
+    --ink: #e8e0c8;
+    --dim: #8a8574;
+    --yang: #ffb000;
+    --yin: #5fc8d8;
+    --grid: #3a3a44;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 system-ui, sans-serif;
+    display: grid; grid-template-columns: minmax(0, 1fr) 300px; height: 100vh;
+  }
+  main { padding: 12px; display: flex; align-items: center; justify-content: center; min-height: 0; }
+  svg { width: 100%; max-width: 760px; max-height: 100%; touch-action: none; user-select: none; }
+  aside { background: var(--panel); padding: 16px; overflow-y: auto; }
+  h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: .08em; }
+  .sub { color: var(--dim); margin: 0 0 14px; font-size: 13px; }
+  .row { display: flex; gap: 8px; margin: 8px 0; align-items: center; flex-wrap: wrap; }
+  label { display: flex; gap: 6px; align-items: center; }
+  button {
+    background: #26262e; color: var(--ink); border: 1px solid #44444f;
+    border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: #31313b; }
+  button.on { background: var(--yang); color: #111; border-color: var(--yang); }
+  input[type=range] { flex: 1; min-width: 100px; }
+  select { background: #26262e; color: var(--ink); border: 1px solid #44444f; border-radius: 4px; padding: 3px 5px; font: inherit; }
+  aside { overflow-x: hidden; }
+  .row label { min-width: 0; }
+  .slotctl { border-top: 1px solid #2c2c34; padding: 4px 0 6px; }
+  .slotctl .row { margin: 4px 0; flex-wrap: nowrap; }
+  .slotctl .row select.scale, .slotctl .row select.hex { flex: 1; min-width: 0; width: 0; }
+  .slotctl .row span { width: 1.2em; color: var(--dim); font-weight: 700; }
+  .slotctl .name { font-size: 12.5px; color: var(--ink); margin-left: 1.9em; }
+  .slotctl .rot { margin-left: 1.9em; gap: 6px; }
+  .slotctl button { padding: 3px 8px; }
+  .hint { color: var(--dim); font-size: 12.5px; }
+  input[type=text] { background: #26262e; color: var(--ink); border: 1px solid #44444f; border-radius: 4px; padding: 3px 5px; font: inherit; }
+  input[type=number] { width: 60px; background: #26262e; color: var(--ink); border: 1px solid #44444f; border-radius: 4px; padding: 3px 5px; }
+  .help { color: var(--dim); font-size: 13px; border-top: 1px solid #2c2c34; margin-top: 14px; padding-top: 10px; }
+  .help b { color: var(--ink); font-weight: 600; }
+  .help p { margin: 6px 0; }
+  #status { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+  @media (max-width: 820px) {
+    body { grid-template-columns: 1fr; height: auto; }
+    svg { max-height: none; }
+  }
+</style>
+</head>
+<body>
+<main><svg id="board" viewBox="0 0 570 570" aria-label="Grille 6x6 d'hexagrammes"></svg></main>
+<aside>
+  <h1>HEXACORDE</h1>
+  <p class="sub">Séquenceur oraculaire</p>
+
+  <div class="row">
+    <button id="play">Jouer</button>
+    <button id="silence">Silence</button>
+  </div>
+  <div class="row"><label style="flex:1">Pas
+    <input id="tempo" type="range" min="80" max="700" step="10" value="240"></label>
+    <span id="tempoVal">240 ms</span></div>
+  <div class="row"><label style="flex:1">Volume
+    <input id="vol" type="range" min="0" max="1" step="0.01" value="0.5"></label></div>
+
+  <div class="row"><label>Portée du trait brisé
+    <input id="soft" type="number" min="1" max="9" step="0.5" value="2.5"></label></div>
+  <div class="row"><label><input id="mutate" type="checkbox"> Mutation des traits</label></div>
+  <div class="row"><label><input id="loop" type="checkbox"> Amorce A tous les
+    <input id="loopN" type="number" min="2" max="128" value="24"> pas</label></div>
+  <div class="row">
+    <button id="midiEnable">Activer le MIDI</button>
+    <select id="midiOut" disabled style="flex:1;min-width:0"><option value="">(aucune sortie)</option></select></div>
+  <div class="row"><label><input id="internal" type="checkbox" checked> Son interne</label>
+    <span id="midiMsg" class="hint"></span></div>
+  <div class="row"><label><input id="rec" type="checkbox"> Enregistrer en fichier MIDI</label></div>
+  <div class="row"><label style="flex:1">Nom
+    <input id="recName" type="text" value="hexacorde" style="flex:1;min-width:0"></label></div>
+
+  <div class="row"><label>Tonique
+    <select id="tonic"></select></label>
+    <label>Tous
+    <select id="modeAll"><option value="">(gamme...)</option></select></label>
+    <label title="Rotation de 60° à chaque pas, pour tous"><input id="rotAll" type="checkbox"> ↻ tous</label></div>
+  <div id="modes"></div>
+
+  <div class="row">
+    <button id="draw">Tirage</button>
+    <button id="scatter">Placement au hasard</button>
+  </div>
+  <div id="status"></div>
+
+  <div class="help">
+    <p><b>Cliquer</b> un hexagone : l'amorcer (lance l'horloge). <b>Glisser</b> : le déplacer sur un point de la grille. <b>Cliquer un trait</b> : le basculer plein / brisé.</p>
+    <p><b>Notes (chromatique)</b> : trait 1 (en haut) do / do#, puis sens horaire ré / ré#, mi / fa, fa# / sol, sol# / la, la# / si. Plein = note naturelle, brisé = note + 1 demi-ton. L'octave dépend de la rangée.</p>
+    <p><b>Notes (gammes)</b> : le côté k joue le degré k+1 de la gamme choisie pour cet hexagone (au-delà de la dernière note, on repart à l'octave). Trait plein : la note est jouée et renvoyée. Trait brisé : silence, rien n'est renvoyé, mais les impulsions reçues le traversent toujours.</p>
+    <p><b>Envoi</b> : chaque trait joué envoie une impulsion dans sa direction, vers le premier hexagone du secteur. Plus il est loin, plus elle met de pas.</p>
+    <p><b>Trait plein</b> : impulsion forte, portée illimitée, et à l'arrivée le côté touché rebondit (l'hexagone se met à jouer). <b>Trait brisé</b> : impulsion douce, portée courte, et à l'arrivée elle traverse l'hexagone sans le faire sonner.</p>
+    <p><b>Nom</b> : chaque hexagramme affiche son numéro et son nom du Yi Jing (ordre du Roi Wen). Le trait 1 de l'hexagone est lu comme le premier trait de l'hexagramme (celui du bas dans la tradition), les traits 4 à 6 forment le trigramme supérieur.</p>
+    <p><b>Réinit.</b> : remet l'hexagramme à sa forme de départ (celle du chargement ou du dernier tirage), arrête sa rotation et efface ses impulsions en attente. Sa position, sa gamme et ses réglages de rotation ne changent pas.</p>
+    <p><b>Rotation</b> (case, sens et vitesse par hexagone) : l'hexagone tourne par pas de 60°. Vitesse ×1 = un pas de 60° à chaque pas d'horloge, ×2 et ×3 = deux ou trois pas de 60°, ÷2, ÷3, ÷4, ÷8 = un pas de 60° tous les 2, 3, 4 ou 8 pas. Le bouton ↻ / ↺ inverse le sens. Chaque trait garde sa note, mais sa direction d'envoi et le trait touché à la réception changent.</p>
+    <p><b>Sortie MIDI en direct</b> : « Activer le MIDI » demande l'accès aux ports (Chrome, Edge ou Firefox ; pas Safari), puis on choisit la sortie. Firefox n'offre pas Web MIDI sur une page ouverte en <code>file://</code> : lancer <code>python3 -m http.server</code> dans le dossier et ouvrir <code>http://localhost:8000</code>. Chaque hexagone a son canal (A = 1 par défaut). Décochez « Son interne » pour n'entendre que le synthé.</p>
+    <p><b>Fichier MIDI</b> : si la case est cochée, tout ce qui sonne entre Jouer et Pause est enregistré, puis téléchargé en <code>nom-date.mid</code> à la Pause. Une piste par hexagone, avec son canal, un pas = une croche.</p>
+    <p><b>Mutation</b> : une impulsion de polarité opposée au côté touché inverse ce trait.</p>
+  </div>
+</aside>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- Géométrie ----------
+  const S = 90, M = 60, R = 36;           // pas de grille, marge, rayon de l'hexagone
+  const N = 6;                            // grille de N x N points
+  const SIDE_DIR = [[0,-1],[.866,-.5],[.866,.5],[0,1],[-.866,.5],[-.866,-.5]];
+  const NAMES = ['do','do#','ré','ré#','mi','fa','fa#','sol','sol#','la','la#','si'];
+  const LABELS = 'ABCDEF';
+  // gammes : demi-tons depuis la tonique. null = chromatique (trait brisé = +1 demi-ton)
+  const SCALES = {
+    chromatique:  { label: 'Chromatique',          short: 'chr', steps: null },
+    majeur:       { label: 'Majeur',               short: 'maj', steps: [0, 2, 4, 5, 7, 9, 11] },
+    mineur:       { label: 'Mineur naturel',       short: 'min', steps: [0, 2, 3, 5, 7, 8, 10] },
+    dorien:       { label: 'Dorien',               short: 'dor', steps: [0, 2, 3, 5, 7, 9, 10] },
+    phrygien:     { label: 'Phrygien',             short: 'phr', steps: [0, 1, 3, 5, 7, 8, 10] },
+    lydien:       { label: 'Lydien',               short: 'lyd', steps: [0, 2, 4, 6, 7, 9, 11] },
+    mixolydien:   { label: 'Mixolydien',           short: 'mix', steps: [0, 2, 4, 5, 7, 9, 10] },
+    pentamajeur:  { label: 'Pentatonique majeure', short: 'pm',  steps: [0, 2, 4, 7, 9] },
+    pentamineur:  { label: 'Pentatonique mineure', short: 'pm-', steps: [0, 3, 5, 7, 10] },
+  };
+  const NS = 'http://www.w3.org/2000/svg';
+
+  // ---------- Les 64 hexagrammes (ordre du Roi Wen) ----------
+  // trigrammes dans l'ordre Qian, Zhen, Kan, Gen, Kun, Xun, Li, Dui ; KW[inférieur][supérieur]
+  // Les traits sont lus du trait 1 (bas dans la tradition) au trait 3 pour le trigramme inférieur.
+  const TRIGRAM = { '111': 0, '100': 1, '010': 2, '001': 3, '000': 4, '011': 5, '101': 6, '110': 7 };
+  const KW = [
+    [ 1, 34,  5, 26, 11,  9, 14, 43],
+    [25, 51,  3, 27, 24, 42, 21, 17],
+    [ 6, 40, 29,  4,  7, 59, 64, 47],
+    [33, 62, 39, 52, 15, 53, 56, 31],
+    [12, 16,  8, 23,  2, 20, 35, 45],
+    [44, 32, 48, 18, 46, 57, 50, 28],
+    [13, 55, 63, 22, 36, 37, 30, 49],
+    [10, 54, 60, 41, 19, 61, 38, 58],
+  ];
+  const HEX_NAMES = [null,
+    ['Qian', 'Le Créateur'], ['Kun', 'Le Réceptif'], ['Zhun', 'La Difficulté initiale'],
+    ['Meng', 'La Folie juvénile'], ['Xu', "L'Attente"], ['Song', 'Le Conflit'],
+    ['Shi', "L'Armée"], ['Bi', 'La Solidarité'], ['Xiao Xu', 'Le Pouvoir d\'apprivoisement du petit'],
+    ['Lü', 'La Marche'], ['Tai', 'La Paix'], ['Pi', 'La Stagnation'],
+    ['Tong Ren', 'Communauté avec les hommes'], ['Da You', 'Possession en grand'], ['Qian', "L'Humilité"],
+    ['Yu', "L'Enthousiasme"], ['Sui', 'La Suite'], ['Gu', 'Le Travail sur ce qui est corrompu'],
+    ['Lin', "L'Approche"], ['Guan', 'La Contemplation'], ['Shi He', 'Mordre au travers'],
+    ['Bi', 'La Grâce'], ['Bo', "L'Éclatement"], ['Fu', 'Le Retour'],
+    ['Wu Wang', "L'Innocence"], ['Da Xu', "Le Pouvoir d'apprivoisement du grand"], ['Yi', 'Les Commissures des lèvres'],
+    ['Da Guo', 'La Prépondérance du grand'], ['Kan', "L'Insondable"], ['Li', "L'Adhérent, le Feu"],
+    ['Xian', "L'Influence"], ['Heng', 'La Durée'], ['Dun', 'La Retraite'],
+    ['Da Zhuang', 'La Puissance du grand'], ['Jin', 'Le Progrès'], ['Ming Yi', "L'Obscurcissement de la lumière"],
+    ['Jia Ren', 'La Famille'], ['Kui', "L'Opposition"], ['Jian', "L'Obstacle"],
+    ['Xie', 'La Libération'], ['Sun', 'La Diminution'], ['Yi', "L'Augmentation"],
+    ['Guai', 'La Percée'], ['Gou', 'Venir à la rencontre'], ['Cui', 'Le Rassemblement'],
+    ['Sheng', 'La Poussée vers le haut'], ['Kun', "L'Accablement"], ['Jing', 'Le Puits'],
+    ['Ge', 'La Révolution'], ['Ding', 'Le Chaudron'], ['Zhen', "L'Ébranlement, le Tonnerre"],
+    ['Gen', "L'Immobilisation, la Montagne"], ['Jian', 'Le Développement'], ['Gui Mei', "L'Épousée"],
+    ['Feng', "L'Abondance"], ['Lü', 'Le Voyageur'], ['Xun', 'Le Doux, le Vent'],
+    ['Dui', 'Le Serein, le Lac'], ['Huan', 'La Dissolution'], ['Jie', 'La Limitation'],
+    ['Zhong Fu', 'La Vérité intérieure'], ['Xiao Guo', 'La Prépondérance du petit'],
+    ['Ji Ji', "Après l'accomplissement"], ['Wei Ji', "Avant l'accomplissement"],
+  ];
+  // numéro (1..64) de l'hexagramme formé par 6 traits
+  const hexNumber = lines =>
+    KW[TRIGRAM[lines.slice(0, 3).join('')]][TRIGRAM[lines.slice(3, 6).join('')]];
+  // traits (6 bits) de l'hexagramme numéro n
+  const HEX_LINES = {};
+  for (let a = 0; a < 64; a++) {
+    const lines = [5, 4, 3, 2, 1, 0].map(i => (a >> i) & 1);
+    HEX_LINES[hexNumber(lines)] = lines;
+  }
+  const hexLabel = n => `${n}. ${HEX_NAMES[n][0]}, ${HEX_NAMES[n][1]}`;
+
+  const mod6 = n => ((n % 6) + 6) % 6;
+  const px = g => M + g * S;
+  const vertex = i => { const a = i * Math.PI / 3; return [R * Math.cos(a), R * Math.sin(a)]; };
+  // côté k (0 = haut, sens horaire) relie les sommets 4+k et 5+k
+  const sideEnds = k => [vertex((4 + k) % 6), vertex((5 + k) % 6)];
+  const sideMid = k => { const a = (270 + 60 * k) * Math.PI / 180; return [Math.cos(a), Math.sin(a)]; };
+
+  // ---------- État ----------
+  const bits = s => s.split('').map(Number);
+  const slots = [
+    { gx: 0, gy: 2, lines: bits('111111') },
+    { gx: 2, gy: 0, lines: bits('101010') },
+    { gx: 4, gy: 1, lines: bits('111000') },
+    { gx: 5, gy: 3, lines: bits('010101') },
+    { gx: 3, gy: 4, lines: bits('000111') },
+    { gx: 1, gy: 4, lines: bits('100110') },
+  ].map((s, i) => Object.assign(s, {
+    id: i, mode: 'chromatique', channel: i,
+    initial: s.lines.slice(),                  // forme de départ, pour la réinitialisation
+    rot: 0, rotOn: false, rotDir: 1, rotSpeed: 1, rotAcc: 0, rotDelta: 0, rotAt: -99,
+    ph: null, flash: [-99,-99,-99,-99,-99,-99],
+  }));
+
+  let pulses = [];
+  let tick = 0, running = false, tickMs = 240;
+  let lastTickAt = performance.now();
+  let timer = null, nextAt = 0;
+  const MAX_PULSES = 300;
+
+  const opt = {
+    softRange: 2.5, mutate: false, loop: false, loopN: 24, tonic: 0,
+  };
+
+  // ---------- Simulation ----------
+  const pcOf = (k, line) => 2 * k + (line ? 0 : 1);
+  // décalage en demi-tons depuis la tonique pour le côté k, ou null si le côté est muet
+  function offsetOf(slot, k) {
+    const line = slot.lines[k], steps = SCALES[slot.mode].steps;
+    if (!steps) return pcOf(k, line);
+    if (!line) return null;                       // gamme : trait brisé = pas de note, pas de renvoi
+    return steps[k % steps.length] + 12 * Math.floor(k / steps.length);
+  }
+  const midiOf = (slot, off) => 48 + 12 * Math.floor((N - 1 - slot.gy) / 2) + opt.tonic + off;
+
+  // secteur (0..5) dans lequel se trouve "to" vu depuis "from" ; demi-ouvert [k*60-30, k*60+30)
+  function sectorOf(from, to) {
+    const cw = Math.atan2(to.gx - from.gx, -(to.gy - from.gy)) * 180 / Math.PI;
+    return Math.floor(((cw + 30 + 1e-6 + 720) % 360) / 60) % 6;
+  }
+
+  function findTarget(from, k) {
+    let best = null, bd = Infinity;
+    for (const o of slots) {
+      if (o === from) continue;
+      if (sectorOf(from, o) !== k) continue;
+      const d = Math.hypot(o.gx - from.gx, o.gy - from.gy);
+      if (d < bd) { bd = d; best = o; }
+    }
+    return best ? { slot: best, dist: bd } : null;
+  }
+
+  function emit(from, k, strong, range) {
+    if (pulses.length >= MAX_PULSES) return;
+    const hit = findTarget(from, k);
+    const x0 = from.gx, y0 = from.gy;
+    if (!hit || hit.dist > range + 1e-9) {
+      // impulsion perdue : petite étincelle qui s'éteint
+      pulses.push({ x0, y0, x1: x0 + SIDE_DIR[k][0] * .6, y1: y0 + SIDE_DIR[k][1] * .6,
+                    t0: tick, t1: tick + 1, target: null, k, strong, range });
+      return;
+    }
+    pulses.push({ x0, y0, x1: hit.slot.gx, y1: hit.slot.gy,
+                  t0: tick, t1: tick + Math.max(1, Math.ceil(hit.dist - 1e-9)),
+                  target: hit.slot, k, strong, range: range - hit.dist });
+  }
+
+  function receive(p) {
+    // côté physique touché s ; le trait qui s'y trouve est li (l'hexagone peut avoir tourné)
+    const slot = p.target, s = (p.k + 3) % 6, li = mod6(s - slot.rot), line = slot.lines[li];
+    if (line === 1) {
+      slot.ph = { side: li, left: 6 };      // trait plein : rebond
+    } else {
+      emit(slot, p.k, p.strong, p.range);   // trait brisé : traversée
+    }
+    if (opt.mutate && (p.strong ? 1 : 0) !== line) {
+      slot.lines[li] ^= 1;
+      drawSlot(slot);
+    }
+  }
+
+  function step() {
+    tick++;
+    lastTickAt = performance.now();
+
+    if (opt.loop && tick % opt.loopN === 1) slots[0].ph = { side: 0, left: 6 };
+
+    const arriving = pulses.filter(p => p.t1 <= tick);
+    pulses = pulses.filter(p => p.t1 > tick);
+    for (const p of arriving) if (p.target) receive(p);
+
+    for (const slot of slots) {
+      if (!slot.ph) continue;
+      const k = slot.ph.side, line = slot.lines[k], off = offsetOf(slot, k);
+      if (off !== null) {
+        const midi = midiOf(slot, off);
+        playNote(midi, line ? 0.16 : 0.08);
+        midiNote(slot, midi, line ? 96 : 56);
+        recNote(slot, midi, line ? 96 : 56);
+        slot.flash[k] = tick;
+        emit(slot, mod6(k + slot.rot), line === 1, line ? Infinity : opt.softRange);
+      }
+      slot.ph.side = (k + 1) % 6;
+      if (--slot.ph.left <= 0) slot.ph = null;
+    }
+
+    // rotation à la fin du pas : rotSpeed pas de 60° par pas d'horloge (fractionnaire = plus lent),
+    // dans le sens rotDir (+1 horaire, -1 antihoraire)
+    for (const slot of slots) {
+      if (!slot.rotOn) continue;
+      slot.rotAcc += slot.rotSpeed;
+      const n = Math.floor(slot.rotAcc + 1e-6);
+      if (n < 1) continue;
+      slot.rotAcc -= n;
+      slot.rotDelta = n * slot.rotDir;
+      slot.rot += slot.rotDelta;
+      slot.rotAt = tick;
+    }
+  }
+
+  // remet un hexagramme à sa forme de départ
+  function resetSlot(slot) {
+    slot.lines = slot.initial.slice();
+    slot.rot = 0; slot.rotAcc = 0; slot.rotDelta = 0; slot.rotAt = -99;
+    slot.ph = null;
+    slot.flash = [-99, -99, -99, -99, -99, -99];
+    pulses = pulses.filter(p => p.target !== slot);
+    midiPanic();
+    drawSlot(slot);
+  }
+
+  // définit un hexagramme par son numéro (devient aussi sa forme de départ)
+  function setHexagram(slot, n) {
+    slot.lines = HEX_LINES[n].slice();
+    slot.initial = slot.lines.slice();
+    drawSlot(slot);
+  }
+
+  // ---------- Horloge ----------
+  function schedule() {
+    if (!running) return;
+    const now = performance.now();
+    if (nextAt < now - 4 * tickMs) nextAt = now;   // rattrapage après onglet en veille
+    step();
+    nextAt += tickMs;
+    timer = setTimeout(schedule, Math.max(0, nextAt - performance.now()));
+  }
+  function start() {
+    ensureAudio();
+    if (running) return;
+    running = true; nextAt = performance.now();
+    $play.textContent = 'Pause'; $play.classList.add('on');
+    if ($rec.checked) beginRecording();
+    schedule();
+  }
+  function stop() {
+    running = false; clearTimeout(timer);
+    $play.textContent = 'Jouer'; $play.classList.remove('on');
+    finishRecording();
+    midiPanic();
+  }
+  function silence() {
+    pulses = [];
+    for (const s of slots) s.ph = null;
+    midiPanic();
+  }
+
+  // ---------- Enregistrement MIDI ----------
+  // Un pas de la simulation = une croche. Les événements sont stockés par numéro de pas
+  // (pas de gigue d'horloge), puis convertis en ticks MIDI à l'export.
+  const PPQ = 480, STEP_TICKS = PPQ / 2, NOTE_TICKS = Math.round(STEP_TICKS * 0.9);
+  let rec = null;
+
+  function beginRecording() {
+    rec = { events: [], tempos: [{ step: tick, ms: tickMs }] };
+  }
+  function recNote(slot, midi, vel) {
+    if (rec) rec.events.push({ step: tick, slot: slot.id, ch: slot.channel, midi, vel });
+  }
+  function recTempo() {
+    if (rec) rec.tempos.push({ step: tick, ms: tickMs });
+  }
+
+  const vlq = n => { const b = [n & 0x7f]; while ((n >>= 7) > 0) b.unshift((n & 0x7f) | 0x80); return b; };
+  const u32 = n => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const u16 = n => [(n >> 8) & 255, n & 255];
+  const ascii = s => Array.from(new TextEncoder().encode(s));
+  const chunk = (id, bytes) => [...ascii(id), ...u32(bytes.length), ...bytes];
+  const metaText = (type, s) => { const t = ascii(s); return [0xff, type, ...vlq(t.length), ...t]; };
+
+  function trackChunk(events) {
+    events.sort((a, b) => a.t - b.t || a.order - b.order);
+    const out = [];
+    let last = 0;
+    for (const e of events) { out.push(...vlq(e.t - last), ...e.bytes); last = e.t; }
+    out.push(0x00, 0xff, 0x2f, 0x00);
+    return chunk('MTrk', out);
+  }
+
+  function buildMidi(r) {
+    const base = Math.min(...r.events.map(e => e.step));   // on supprime le silence de tête
+
+    // piste 0 : tempo (un pas = une croche, donc 1 noire = 2 pas)
+    const tempoTrack = [{ t: 0, order: 0, bytes: metaText(0x03, 'Hexacorde') },
+                        { t: 0, order: 1, bytes: [0xff, 0x58, 0x04, 4, 2, 24, 8] }];
+    const initial = r.tempos.filter(x => x.step <= base).pop() || r.tempos[0];
+    const usq = ms => { const v = Math.round(ms * 2000); return [0xff, 0x51, 0x03, (v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+    tempoTrack.push({ t: 0, order: 2, bytes: usq(initial.ms) });
+    for (const x of r.tempos) if (x.step > base) tempoTrack.push({ t: (x.step - base) * STEP_TICKS, order: 2, bytes: usq(x.ms) });
+
+    // une piste par hexagone, avec le canal choisi pour cet hexagone
+    const tracks = [trackChunk(tempoTrack)];
+    for (const slot of slots) {
+      const mine = r.events.filter(e => e.slot === slot.id);
+      if (!mine.length) continue;
+      const ev = [{ t: 0, order: 0, bytes: metaText(0x03, `Hexacorde ${LABELS[slot.id]} ${slot.mode}`) }];
+      for (const e of mine) {
+        const t = (e.step - base) * STEP_TICKS;
+        ev.push({ t, order: 1, bytes: [0x90 | e.ch, e.midi, e.vel] });
+        ev.push({ t: t + NOTE_TICKS, order: 0, bytes: [0x80 | e.ch, e.midi, 0] });
+      }
+      tracks.push(trackChunk(ev));
+    }
+    const header = chunk('MThd', [...u16(1), ...u16(tracks.length), ...u16(PPQ)]);
+    return Uint8Array.from([header, ...tracks].flat());
+  }
+
+  function download(bytes, filename) {
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/midi' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  function finishRecording() {
+    const r = rec;
+    rec = null;
+    if (!r || !r.events.length) return;
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    const name = ($recName.value.trim() || 'hexacorde').replace(/[^\p{L}\p{N}_. -]+/gu, '_');
+    download(buildMidi(r), `${name}-${stamp}.mid`);
+  }
+
+  // ---------- Sortie MIDI en direct (Web MIDI) ----------
+  let midiAccess = null, midiOut = null;
+
+  function midiNote(slot, midi, vel) {
+    if (!midiOut) return;
+    const ch = slot.channel;
+    try {
+      midiOut.send([0x90 | ch, midi, vel]);
+      // le note off est planifié par le navigateur : 90 % d'un pas plus tard
+      midiOut.send([0x80 | ch, midi, 0], performance.now() + tickMs * 0.9);
+    } catch (_) { /* port fermé */ }
+  }
+  // all notes off sur les 16 canaux
+  function midiPanic() {
+    if (!midiOut) return;
+    try { for (let ch = 0; ch < 16; ch++) midiOut.send([0xb0 | ch, 123, 0]); } catch (_) { /* port fermé */ }
+  }
+
+  // ---------- Son : carré ----------
+  let ac = null, master = null, voices = 0;
+  function ensureAudio() {
+    if (!ac) {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      master = ac.createGain();
+      master.gain.value = +$vol.value;
+      const lp = ac.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 3200;
+      master.connect(lp); lp.connect(ac.destination);
+    }
+    if (ac.state === 'suspended') ac.resume();
+  }
+  function playNote(midi, gain) {
+    if (!ac || voices > 32 || !$internal.checked) return;
+    const dur = Math.min(0.6, Math.max(0.08, tickMs / 1000 * 1.5));
+    const t = ac.currentTime;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'square';
+    o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    voices++;
+    o.onended = () => { voices--; g.disconnect(); };
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+
+  // ---------- Dessin ----------
+  const svg = document.getElementById('board');
+  const el = (name, attrs = {}, parent) => {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  };
+
+  // points de la grille
+  const gridLayer = el('g', {}, svg);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
+    el('circle', { cx: px(x), cy: px(y), r: 2.5, fill: 'var(--grid)' }, gridLayer);
+  const slotLayer = el('g', {}, svg);
+  const pulseLayer = el('g', { 'pointer-events': 'none' }, svg);
+
+  for (const slot of slots) {
+    slot.g = el('g', { cursor: 'grab' }, slotLayer);
+    drawSlot(slot);
+  }
+
+  function drawSlot(slot) {
+    const g = slot.g;
+    while (g.firstChild) g.removeChild(g.firstChild);
+    g.setAttribute('transform', `translate(${px(slot.gx)},${px(slot.gy)})`);
+
+    const pts = [0,1,2,3,4,5].map(i => vertex(i).join(',')).join(' ');
+    const body = el('polygon', { points: pts, fill: '#1c1c22', stroke: '#2a2a33', 'stroke-width': 1 }, g);
+    body.addEventListener('pointerdown', e => beginDrag(e, slot));
+
+    el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+                 'font-size': 15, fill: '#4a4a56', 'font-weight': 700, 'pointer-events': 'none' }, g)
+      .textContent = LABELS[slot.id];
+    el('text', { x: 0, y: 13, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+                 'font-size': 7, fill: '#4a4a56', 'pointer-events': 'none' }, g)
+      .textContent = SCALES[slot.mode].short;
+
+    // numéro et nom de l'hexagramme sous l'hexagone
+    const hn = hexNumber(slot.lines);
+    el('text', { x: 0, y: R + 11, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
+                 'font-size': 8.5, fill: 'var(--dim)', 'pointer-events': 'none' }, g)
+      .textContent = `${hn} ${HEX_NAMES[hn][0]}`;
+    if (slot.hexSel) slot.hexSel.value = hn;
+
+    slot.sideEls = []; slot.labelEls = [];
+    slot.rotG = el('g', {}, g);               // traits : tournent avec l'hexagone
+    for (let k = 0; k < 6; k++) {
+      const [a, b] = sideEnds(k);
+      const inset = 0.12;
+      const lerp = (u, v, t) => [u[0] + (v[0] - u[0]) * t, u[1] + (v[1] - u[1]) * t];
+      const segs = slot.lines[k]
+        ? [[lerp(a, b, inset), lerp(a, b, 1 - inset)]]
+        : [[lerp(a, b, inset), lerp(a, b, 0.42)], [lerp(a, b, 0.58), lerp(a, b, 1 - inset)]];
+      const sg = el('g', {}, slot.rotG);
+      const els = segs.map(([p, q]) => el('line', {
+        x1: p[0], y1: p[1], x2: q[0], y2: q[1],
+        stroke: 'var(--ink)', 'stroke-width': 5, 'stroke-linecap': 'round',
+      }, sg));
+      // zone cliquable pour basculer le trait
+      const hit = el('line', {
+        x1: a[0], y1: a[1], x2: b[0], y2: b[1],
+        stroke: 'transparent', 'stroke-width': 14, cursor: 'pointer',
+      }, sg);
+      hit.addEventListener('pointerdown', e => e.stopPropagation());
+      hit.addEventListener('click', () => { slot.lines[k] ^= 1; drawSlot(slot); });
+      slot.sideEls.push(els);
+
+      const m = sideMid(k);
+      const t = el('text', {
+        x: m[0] * R * 0.58, y: m[1] * R * 0.58,
+        'text-anchor': 'middle', 'dominant-baseline': 'middle',
+        'font-size': 8.5, fill: 'var(--dim)', 'pointer-events': 'none',
+      }, g);
+      const off = offsetOf(slot, k);
+      t.textContent = off === null ? '·' : NAMES[(opt.tonic + off) % 12];
+      slot.labelEls.push(t);
+    }
+    applyRotation(slot, 60 * slot.rot);
+  }
+
+  // fait tourner les traits de deg degrés ; les étiquettes suivent mais restent droites
+  function applyRotation(slot, deg) {
+    slot.rotG.setAttribute('transform', `rotate(${deg})`);
+    for (let k = 0; k < 6; k++) {
+      const a = (270 + 60 * k + deg) * Math.PI / 180;
+      slot.labelEls[k].setAttribute('x', Math.cos(a) * R * 0.58);
+      slot.labelEls[k].setAttribute('y', Math.sin(a) * R * 0.58);
+    }
+  }
+
+  // glisser / cliquer
+  let drag = null;
+  function svgPoint(e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function beginDrag(e, slot) {
+    e.preventDefault();
+    const p = svgPoint(e);
+    drag = { slot, ox: p.x - px(slot.gx), oy: p.y - px(slot.gy), moved: false, sx: e.clientX, sy: e.clientY };
+    try { slot.g.setPointerCapture(e.pointerId); } catch (_) { /* pointeur non capturable */ }
+    slot.g.setAttribute('cursor', 'grabbing');
+    slot.g.addEventListener('pointermove', onMove);
+    slot.g.addEventListener('pointerup', onUp);
+    slot.g.addEventListener('pointercancel', onUp);
+  }
+  function onMove(e) {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 5) return;
+    drag.moved = true;
+    const p = svgPoint(e);
+    drag.slot.g.setAttribute('transform', `translate(${p.x - drag.ox},${p.y - drag.oy})`);
+  }
+  function onUp(e) {
+    if (!drag) return;
+    const { slot, moved } = drag;
+    slot.g.removeEventListener('pointermove', onMove);
+    slot.g.removeEventListener('pointerup', onUp);
+    slot.g.removeEventListener('pointercancel', onUp);
+    slot.g.setAttribute('cursor', 'grab');
+    drag = null;
+    if (moved && e.type === 'pointerup') {
+      const p = svgPoint(e);
+      const gx = Math.max(0, Math.min(N - 1, Math.round((p.x - M) / S)));
+      const gy = Math.max(0, Math.min(N - 1, Math.round((p.y - M) / S)));
+      if (!slots.some(o => o !== slot && o.gx === gx && o.gy === gy)) { slot.gx = gx; slot.gy = gy; }
+      drawSlot(slot);
+    } else if (!moved) {
+      slot.ph = { side: 0, left: 6 };
+      start();
+    }
+  }
+
+  // animation : impulsions et éclats
+  const pulseEls = new Map();
+  function frame(now) {
+    const tf = tick + (running ? Math.min(1, (now - lastTickAt) / tickMs) : 0);
+
+    const seen = new Set();
+    for (const p of pulses) {
+      let c = pulseEls.get(p);
+      if (!c) { c = el('circle', {}, pulseLayer); pulseEls.set(p, c); }
+      seen.add(p);
+      const u = Math.max(0, Math.min(1, (tf - p.t0) / (p.t1 - p.t0)));
+      c.setAttribute('cx', px(p.x0 + (p.x1 - p.x0) * u));
+      c.setAttribute('cy', px(p.y0 + (p.y1 - p.y0) * u));
+      c.setAttribute('r', p.strong ? 6 : 4);
+      c.setAttribute('fill', p.strong ? 'var(--yang)' : 'var(--yin)');
+      c.setAttribute('opacity', p.target ? 1 : 1 - u);
+    }
+    for (const [p, c] of pulseEls) if (!seen.has(p)) { c.remove(); pulseEls.delete(p); }
+
+    for (const slot of slots) {
+      // rotation animée sur la durée du pas qui suit le tour
+      const u = running ? Math.min(1, Math.max(0, tf - slot.rotAt)) : 1;
+      applyRotation(slot, 60 * (slot.rot - slot.rotDelta * (1 - u * u * (3 - 2 * u))));
+      for (let k = 0; k < 6; k++) {
+        const f = Math.max(0, 1 - (tf - slot.flash[k]) / 2.5);
+        const color = f > 0 ? (slot.lines[k] ? 'var(--yang)' : 'var(--yin)') : 'var(--ink)';
+        for (const l of slot.sideEls[k]) {
+          l.setAttribute('stroke', color);
+          l.setAttribute('stroke-width', 5 + 3 * f);
+          l.setAttribute('opacity', 0.55 + 0.45 * Math.max(f, 0.0));
+        }
+        slot.labelEls[k].setAttribute('fill', f > 0 ? 'var(--ink)' : 'var(--dim)');
+      }
+    }
+    $status.textContent = `pas ${tick} · impulsions ${pulses.length}` +
+      (rec ? ` · REC ${rec.events.length} notes` : '');
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- Commandes ----------
+  const $ = id => document.getElementById(id);
+  const $play = $('play'), $vol = $('vol'), $status = $('status');
+  const $rec = $('rec'), $recName = $('recName'), $internal = $('internal');
+
+  $play.addEventListener('click', () => running ? stop() : start());
+  $('silence').addEventListener('click', silence);
+  $('tempo').addEventListener('input', e => {
+    tickMs = +e.target.value;
+    $('tempoVal').textContent = tickMs + ' ms';
+    recTempo();
+  });
+  $rec.addEventListener('change', () => {
+    if ($rec.checked) { if (running) beginRecording(); }
+    else finishRecording();
+  });
+  $vol.addEventListener('input', e => { if (master) master.gain.value = +e.target.value; });
+  $('soft').addEventListener('input', e => { opt.softRange = Math.max(1, +e.target.value || 1); });
+  $('mutate').addEventListener('change', e => { opt.mutate = e.target.checked; });
+  $('loop').addEventListener('change', e => { opt.loop = e.target.checked; });
+  $('loopN').addEventListener('input', e => { opt.loopN = Math.max(2, +e.target.value || 24); });
+
+  // tonique et gamme par hexagone
+  const scaleOptions = () => Object.entries(SCALES)
+    .map(([key, v]) => `<option value="${key}">${v.label}</option>`).join('');
+  $('tonic').innerHTML = NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+  $('tonic').addEventListener('change', e => {
+    opt.tonic = +e.target.value;
+    slots.forEach(drawSlot);
+  });
+  $('modeAll').insertAdjacentHTML('beforeend', scaleOptions());
+  const modesBox = $('modes');
+  const hexOptions = Array.from({ length: 64 }, (_, i) => `<option value="${i + 1}">${hexLabel(i + 1)}</option>`).join('');
+  const chanOptions = Array.from({ length: 16 }, (_, i) => `<option value="${i}">${i + 1}</option>`).join('');
+  const SPEEDS = [[0.125, '÷8'], [0.25, '÷4'], [1 / 3, '÷3'], [0.5, '÷2'], [1, '×1'], [2, '×2'], [3, '×3']];
+  for (const slot of slots) {
+    const box = document.createElement('div');
+    box.className = 'slotctl';
+    box.innerHTML = `
+      <div class="row"><span>${LABELS[slot.id]}</span>
+        <select class="hex" title="Hexagramme">${hexOptions}</select></div>
+      <div class="row"><span></span>
+        <select class="scale" title="Gamme">${scaleOptions()}</select>
+        <select class="chan" title="Canal MIDI">${chanOptions}</select></div>
+      <div class="row rot">
+        <label title="Faire tourner cet hexagone"><input class="rotOn" type="checkbox"> rot.</label>
+        <button class="dir" title="Sens de rotation">↻</button>
+        <select class="spd" title="Vitesse de rotation">${SPEEDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
+        <button class="reset" title="Remettre cet hexagramme à sa forme de départ">Réinit.</button>
+      </div>`;
+    const q = s => box.querySelector(s);
+    slot.hexSel = q('.hex');
+    slot.hexSel.value = hexNumber(slot.lines);
+    slot.hexSel.addEventListener('change', () => setHexagram(slot, +slot.hexSel.value));
+
+    slot.modeSel = q('.scale');
+    slot.modeSel.value = slot.mode;
+    slot.modeSel.addEventListener('change', () => { slot.mode = slot.modeSel.value; drawSlot(slot); });
+
+    q('.chan').value = slot.channel;
+    q('.chan').addEventListener('change', e => { midiPanic(); slot.channel = +e.target.value; });
+
+    slot.rotChk = q('.rotOn');
+    slot.rotChk.addEventListener('change', () => { slot.rotOn = slot.rotChk.checked; });
+    const dir = q('.dir');
+    dir.addEventListener('click', () => {
+      slot.rotDir = -slot.rotDir;
+      dir.textContent = slot.rotDir > 0 ? '↻' : '↺';
+    });
+    q('.spd').value = slot.rotSpeed;
+    q('.spd').addEventListener('change', e => { slot.rotSpeed = +e.target.value; slot.rotAcc = 0; });
+    q('.reset').addEventListener('click', () => resetSlot(slot));
+    modesBox.appendChild(box);
+  }
+  $('rotAll').addEventListener('change', e => {
+    for (const s of slots) { s.rotOn = e.target.checked; s.rotChk.checked = s.rotOn; }
+  });
+  $('modeAll').addEventListener('change', e => {
+    if (!e.target.value) return;
+    for (const s of slots) { s.mode = e.target.value; s.modeSel.value = s.mode; drawSlot(s); }
+    e.target.value = '';
+  });
+
+  $('draw').addEventListener('click', () => {
+    for (const s of slots) {
+      s.lines = s.lines.map(() => (Math.random() < 0.5 ? 1 : 0));
+      s.initial = s.lines.slice();             // le tirage devient la forme de départ
+      drawSlot(s);
+    }
+  });
+
+  // sortie MIDI en direct
+  const $midiOut = $('midiOut'), $midiMsg = $('midiMsg');
+  function refreshPorts() {
+    const prev = midiOut ? midiOut.id : $midiOut.value;
+    const outs = midiAccess ? Array.from(midiAccess.outputs.values()) : [];
+    $midiOut.innerHTML = '<option value="">(aucune sortie)</option>' +
+      outs.map(o => `<option value="${o.id}">${o.name}</option>`).join('');
+    $midiOut.disabled = !outs.length;
+    $midiOut.value = outs.some(o => o.id === prev) ? prev : '';
+    applyOutput();
+    $midiMsg.textContent = outs.length ? '' : 'aucune sortie MIDI détectée';
+  }
+  function applyOutput() {
+    midiPanic();
+    midiOut = midiAccess && $midiOut.value ? midiAccess.outputs.get($midiOut.value) || null : null;
+  }
+  $midiOut.addEventListener('change', applyOutput);
+  $('midiEnable').addEventListener('click', async () => {
+    if (!navigator.requestMIDIAccess) {
+      $midiMsg.textContent = location.protocol === 'file:'
+        ? 'Web MIDI absent en file:// (Firefox) : servir la page, voir l\'aide'
+        : 'Web MIDI indisponible dans ce navigateur (essayer Chrome, Edge ou Firefox)';
+      return;
+    }
+    try {
+      midiAccess = await navigator.requestMIDIAccess();
+      midiAccess.onstatechange = refreshPorts;
+      refreshPorts();
+    } catch (err) {
+      $midiMsg.textContent = 'accès MIDI refusé';
+    }
+  });
+  window.addEventListener('pagehide', midiPanic);
+  $('scatter').addEventListener('click', () => {
+    const cells = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) cells.push([x, y]);
+    for (let i = cells.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cells[i], cells[j]] = [cells[j], cells[i]];
+    }
+    slots.forEach((s, i) => { [s.gx, s.gy] = cells[i]; drawSlot(s); });
+    silence();
+  });
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
