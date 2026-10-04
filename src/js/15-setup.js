@@ -29,6 +29,8 @@ function getSetup() {
     date: stamp().iso,
     pas: tickMs, tonique: opt.tonic, portee: opt.softRange, mutation: opt.mutate,
     amorce: opt.loop ? opt.loopN : 0,
+    son: { onde: snd.wave, a: snd.a, d: snd.d, s: snd.s, r: snd.r,
+           filtre: snd.ftype, coupure: snd.fcut, q: snd.fq, env: snd.fenv },
     hexagrammes: slots.map(s => ({
       lettre: LABELS[s.id], pos: [s.gx, s.gy], traits: s.lines.join(''), depart: s.initial.join(''),
       gamme: s.mode, canal: s.channel + 1,
@@ -92,8 +94,15 @@ function parseSetup(text) {
                 rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: mod6(angle / 60) });
   }
   const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
+  const so = d.son || {}, son = {
+    wave: WAVE_GAIN[so.onde] ? so.onde : snd.wave,
+    a: Math.round(num(so.a, 1, 500, snd.a)), d: Math.round(num(so.d, 10, 1000, snd.d)),
+    s: num(so.s, 0, 1, snd.s), r: Math.round(num(so.r, 10, 1500, snd.r)),
+    ftype: FILTERS[so.filtre] ? so.filtre : snd.ftype, fcut: Math.round(num(so.coupure, 30, 16000, snd.fcut)),
+    fq: num(so.q, 0.1, 20, snd.fq), fenv: num(so.env, 0, 1, snd.fenv),
+  };
   return { cfg: {
-    slots: list,
+    slots: list, son,
     pas: Math.round(num(d.pas, 80, 700, 240)), tonique: Math.round(num(d.tonique, 0, 11, 0)),
     portee: num(d.portee, 1, 9, 2.5), mutation: !!d.mutation,
     amorce: Number.isFinite(d.amorce) && d.amorce >= 2 ? Math.min(128, Math.round(d.amorce)) : 0,
@@ -108,6 +117,7 @@ function applySetup(cfg) {
   opt.mutate = cfg.mutation; $('mutate').checked = opt.mutate;
   opt.loop = cfg.amorce > 0; $('loop').checked = opt.loop;
   if (opt.loop) { opt.loopN = cfg.amorce; $('loopN').value = opt.loopN; }
+  Object.assign(snd, cfg.son); showSound();
   slots.forEach((s, i) => {
     const c = cfg.slots[i];
     Object.assign(s, { gx: c.gx, gy: c.gy, lines: c.lines, initial: c.initial, mode: c.mode, channel: c.channel,

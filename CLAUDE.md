@@ -2,9 +2,9 @@
 
 Séquenceur oraculaire en HTML + JS pur (un seul fichier, `index.html`, aucune dépendance). Six hexagrammes du Yi Jing sont posés sur une grille de 6x6 points. Chaque trait joué envoie une impulsion vers un autre hexagramme, et les impulsions se répercutent de proche en proche.
 
-Le son interne est un simple oscillateur carré (WebAudio), désactivable. La sortie MIDI en direct (Web MIDI) vers un synthé externe (JV-880, D110...) et l'export en fichier .mid existent (voir plus bas). Une version uxn est envisagée plus tard.
+Le son interne est un oscillateur WebAudio (carré par défaut, triangle, dent de scie, sinus) avec enveloppe ADSR et filtre réglables, désactivable. La sortie MIDI en direct (Web MIDI) vers un synthé externe (JV-880, D110...) et l'export en fichier .mid existent (voir plus bas). Une version uxn est envisagée plus tard.
 
-Fonctions actuelles : 6 hexagrammes sur grille 6x6, propagation d'impulsions, choix de l'hexagramme parmi les 64 avec son nom du Yi Jing, chromatique ou gammes par hexagone, notes personnalisées par hexagone, tonique globale, rotation individuelle (vitesse et sens) et rotation manuelle, réinitialisation individuelle, sauvegarde et chargement de setups (mémoire, fichier, texte), mutation des traits, amorce automatique, tirage et placement aléatoires, sortie MIDI en direct, enregistrement vers un fichier MIDI. Voir `README.md` pour la présentation côté utilisateur.
+Fonctions actuelles : 6 hexagrammes sur grille 6x6, propagation d'impulsions, choix de l'hexagramme parmi les 64 avec son nom du Yi Jing, chromatique ou gammes par hexagone, notes personnalisées par hexagone, tonique globale, rotation individuelle (vitesse et sens) et rotation manuelle, réinitialisation individuelle, sauvegarde et chargement de setups (mémoire, fichier, texte), mutation des traits, amorce automatique, tirage et placement aléatoires, sortie MIDI en direct, enregistrement vers un fichier MIDI. Voir `README.md` (anglais, version par défaut) et `README.fr.md` (français) pour la présentation côté utilisateur. **Les deux README doivent être mis à jour ensemble** à chaque changement de fonction.
 
 ## Conventions de conception
 
@@ -58,6 +58,7 @@ Fonctions actuelles : 6 hexagrammes sur grille 6x6, propagation d'impulsions, ch
 - Bouton « Activer le MIDI » : `navigator.requestMIDIAccess()` (Chrome, Edge, Firefox ; pas Safari). **Firefox masque `navigator.requestMIDIAccess` en `file://`** (vérifié avec Firefox 157 : `undefined` en `file://`, `function` en `http://localhost`, `isSecureContext` vrai dans les deux cas) : il faut servir la page (`python3 -m http.server`, puis `http://localhost:8000`). Chrome fonctionne aussi en `file://`. Le message d'erreur de la page distingue les deux cas, puis menu des sorties, rafraîchi aux branchements (`onstatechange`).
 - Chaque hexagone a son **canal** (`slot.channel`, A = 1 par défaut, réglable de 1 à 16). À chaque note jouée (`step`) : note on immédiat, note off planifié par le navigateur à `performance.now() + 0.9 * tickMs` (aucun `setTimeout`). Même vélocité que le fichier (96 / 56).
 - `midiPanic()` (CC 123 sur les 16 canaux) à Pause, Silence, Réinit., changement de sortie ou de canal, et à la fermeture de la page.
+- Son interne : `snd` global (09-audio.js : wave, a, d, s, r, ftype, fcut, fq, fenv), édité dans `<details id="sound">` (17-sound-ui.js, `showSound()` resynchronise tout, à appeler après toute modification de `snd`). Filtre biquad par note, avec option d'enveloppe de filtre (fenv, jusqu'à 4 octaves). Sauvé dans le setup (clé `son`, chaque champ optionnel au chargement). Le relâchement part à `0.9*tickMs`, sans `cancelAndHoldAtTime` (absent de Firefox) : le niveau de fin de note est calculé dans `adsr()`.
 - Case « Son interne » : décochée, l'oscillateur carré est coupé pour n'entendre que le synthé.
 - Pas de program change, de bank select ni de clock envoyés pour l'instant.
 
@@ -87,7 +88,8 @@ Fichiers JS, dans l'ordre :
 | `06-clock.js` | `schedule`, `start`, `stop`, `silence` |
 | `07-midi-file.js` | enregistrement et export `.mid`, `download` |
 | `08-midi-out.js` | `midiNote`, `midiPanic` (Web MIDI) |
-| `09-audio.js` | son interne carré |
+| `09-audio.js` | son interne : `snd` (onde, ADSR, filtre), `adsr()`, `playNote` (oscillateur, filtre et gain par note) |
+| `17-sound-ui.js` | menu « Son interne : édition » : graphique ADSR déplaçable, courbe du filtre, `showSound()` |
 | `10-board.js` | SVG, `drawSlot`, `applyRotation` |
 | `11-drag.js` | glisser-déposer, clic sur un hexagone |
 | `12-frame.js` | boucle d'animation `frame` |
@@ -128,3 +130,10 @@ Trois recherches rapides (outil limité aux résultats américains, donc non exh
 ## Règles de rédaction
 - Pas de tiret quadratin (U+2014) : utiliser `-` (consigne globale d'Alan).
 - Interface et commentaires en français.
+
+## Publication (GitHub Pages)
+
+- Le site est `index.html` à la racine, servi tel quel par GitHub Pages (Settings, Pages, Deploy from a branch, `main`, `/ (root)`). `.nojekyll` désactive Jekyll. Aucun workflow : `index.html` est généré en local par `make` et **doit être commité** avec `src/`.
+- En HTTPS, Web MIDI fonctionne dans Firefox (contrairement à `file://`).
+- L'interface et les clés du setup restent en français ; seuls les README sont bilingues.
+- Licence : BSD 3 clauses (`LICENSE`, copyright 2026 luginf), mentionnée dans les deux README.

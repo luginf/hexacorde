@@ -5,6 +5,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hexacorde</title>
+<meta name="description" content="Hexacorde : séquenceur oraculaire, six hexagrammes du Yi Jing sur une grille, en HTML et JavaScript purs.">
+<meta property="og:title" content="Hexacorde">
+<meta property="og:description" content="Séquenceur oraculaire : six hexagrammes du Yi Jing s'envoient des notes sur une grille.">
+<meta property="og:type" content="website">
 <style>
   :root {
     --bg: #111114;
@@ -56,7 +60,7 @@
   #ctxMenu .cform > span { color: var(--dim); }
   #ctxMenu .cform > select { width: 100%; min-width: 0; }
   #ctxMenu .cform .crow { margin: 0; }
-  #ctxMenu .csep { border-top: 1px solid #2c2c34; margin: 8px 0 4px; }
+  #ctxMenu .csep, #sound .csep { border-top: 1px solid #2c2c34; margin: 8px 0 4px; }
   #ctxMenu .cgrid b { color: var(--dim); font-weight: 600; }
   #ctxMenu .cgrid span { color: var(--dim); }
   #ctxMenu select { padding: 1px 3px; min-width: 0; }
@@ -74,6 +78,12 @@
     body { grid-template-columns: 1fr; height: auto; }
     svg { max-height: none; }
   }
+
+  #sound canvas { display: block; width: 100%; background: #101014; border: 1px solid #2c2c34; border-radius: 4px; margin: 6px 0; touch-action: none; }
+  .sl { display: flex; gap: 6px; align-items: center; margin: 3px 0; }
+  .sl span { width: 1.8em; color: var(--dim); font-weight: 700; }
+  .sl input { flex: 1; min-width: 0; }
+  .sl output { width: 5.5em; text-align: right; font-size: 12px; color: var(--dim); }
 </style>
 </head>
 <body>
@@ -102,6 +112,21 @@
     <select id="midiOut" disabled style="flex:1;min-width:0"><option value="">(aucune sortie)</option></select></div>
   <div class="row"><label><input id="internal" type="checkbox" checked> Son interne</label>
     <span id="midiMsg" class="hint"></span></div>
+  <details id="sound"><summary>Son interne : édition</summary>
+    <div class="row"><label>Onde <select id="wave"></select></label></div>
+    <canvas id="envCv" width="272" height="110" title="Glisser les points : A, D + S, R"></canvas>
+    <div class="sl"><span>A</span><input id="envA" type="range" min="1" max="500"><output id="oA"></output></div>
+    <div class="sl"><span>D</span><input id="envD" type="range" min="10" max="1000"><output id="oD"></output></div>
+    <div class="sl"><span>S</span><input id="envS" type="range" min="0" max="1" step="0.01"><output id="oS"></output></div>
+    <div class="sl"><span>R</span><input id="envR" type="range" min="10" max="1500"><output id="oR"></output></div>
+    <div class="csep"></div>
+    <div class="row"><label>Filtre <select id="ftype"></select></label></div>
+    <canvas id="fltCv" width="272" height="80"></canvas>
+    <div class="sl"><span>Fc</span><input id="fcut" type="range" min="0" max="1" step="0.001"><output id="oFc"></output></div>
+    <div class="sl"><span>Q</span><input id="fq" type="range" min="0.1" max="20" step="0.1"><output id="oQ"></output></div>
+    <div class="sl" title="Profondeur de l'enveloppe qui ouvre le filtre (suit A D S R)"><span>Env</span><input id="fenv" type="range" min="0" max="1" step="0.01"><output id="oEnv"></output></div>
+    <button id="soundReset">Son par défaut</button>
+  </details>
   <div class="row"><label><input id="rec" type="checkbox"> Enregistrer en fichier MIDI</label></div>
   <div class="row"><label style="flex:1">Nom
     <input id="recName" type="text" value="hexacorde" style="flex:1;min-width:0"></label></div>
@@ -542,26 +567,43 @@ function ensureAudio() {
     ac = new (window.AudioContext || window.webkitAudioContext)();
     master = ac.createGain();
     master.gain.value = +$vol.value;
-    const lp = ac.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 3200;
-    master.connect(lp); lp.connect(ac.destination);
+    master.connect(ac.destination);
   }
   if (ac.state === 'suspended') ac.resume();
 }
+// onde, enveloppe ADSR (A, D, R en ms, S = niveau de 0 à 1) et filtre (une instance par note)
+// fenv : profondeur de l'enveloppe de filtre (0 à 1, jusqu'à 4 octaves au-dessus de la coupure)
+const snd = { wave: 'square', a: 5, d: 250, s: 0.1, r: 150, ftype: 'lowpass', fcut: 3200, fq: 0.7, fenv: 0 };
+const WAVE_GAIN = { square: 1, sawtooth: 0.8, triangle: 1.4, sine: 1.4 };   // volumes à peu près égaux
+const FILTERS = { lowpass: 'passe-bas', highpass: 'passe-haut', bandpass: 'passe-bande', notch: 'coupe-bande' };
+// attaque vers `peak`, déclin vers `sus`, tenue jusqu'à `tg`, relâchement vers `end`
+// (le niveau à tg est calculé : cancelAndHoldAtTime n'existe pas dans Firefox)
+function adsr(param, t, A, D, R, tg, start, peak, sus, end) {
+  param.setValueAtTime(start, t);
+  param.linearRampToValueAtTime(peak, t + A);
+  param.setTargetAtTime(sus, t + A, D / 3);
+  param.setValueAtTime(sus + (peak - sus) * Math.exp(-(tg - t - A) / (D / 3)), tg);
+  param.setTargetAtTime(end, tg, R / 3);
+}
 function playNote(midi, gain) {
   if (!ac || voices > 32 || !$internal.checked) return;
-  const dur = Math.min(0.6, Math.max(0.08, tickMs / 1000 * 1.5));
-  const t = ac.currentTime;
-  const o = ac.createOscillator(), g = ac.createGain();
-  o.type = 'square';
+  const gate = Math.max(0.05, tickMs / 1000 * 0.9);          // même durée que la note MIDI
+  const A = Math.min(snd.a / 1000, gate), D = snd.d / 1000, R = snd.r / 1000;
+  const peak = gain * WAVE_GAIN[snd.wave];
+  const t = ac.currentTime, tg = t + gate;
+  const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+  o.type = snd.wave;
   o.frequency.value = 440 * Math.pow(2, (midi - 69) / 12);
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(gain, t + 0.005);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g); g.connect(master);
+  f.type = snd.ftype; f.Q.value = snd.fq;
+  const top = Math.min(18000, snd.fcut * Math.pow(2, 4 * snd.fenv));
+  const mid = Math.min(18000, snd.fcut * Math.pow(2, 4 * snd.fenv * snd.s));
+  f.frequency.value = snd.fcut;
+  if (snd.fenv > 0) adsr(f.frequency, t, A, D, R, tg, snd.fcut, top, mid, snd.fcut);
+  adsr(g.gain, t, A, D, R, tg, 0, peak, peak * snd.s, 0);
+  o.connect(f); f.connect(g); g.connect(master);
   voices++;
   o.onended = () => { voices--; g.disconnect(); };
-  o.start(t); o.stop(t + dur + 0.02);
+  o.start(t); o.stop(tg + R + 0.05);
 }
 
 // ===== src/js/10-board.js =====
@@ -938,6 +980,8 @@ function getSetup() {
     date: stamp().iso,
     pas: tickMs, tonique: opt.tonic, portee: opt.softRange, mutation: opt.mutate,
     amorce: opt.loop ? opt.loopN : 0,
+    son: { onde: snd.wave, a: snd.a, d: snd.d, s: snd.s, r: snd.r,
+           filtre: snd.ftype, coupure: snd.fcut, q: snd.fq, env: snd.fenv },
     hexagrammes: slots.map(s => ({
       lettre: LABELS[s.id], pos: [s.gx, s.gy], traits: s.lines.join(''), depart: s.initial.join(''),
       gamme: s.mode, canal: s.channel + 1,
@@ -1001,8 +1045,15 @@ function parseSetup(text) {
                 rotOn: !!r.active, rotDir: r.sens === 'antihoraire' ? -1 : 1, rotSpeed: sp[0], rot: mod6(angle / 60) });
   }
   const num = (v, lo, hi, def) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : def);
+  const so = d.son || {}, son = {
+    wave: WAVE_GAIN[so.onde] ? so.onde : snd.wave,
+    a: Math.round(num(so.a, 1, 500, snd.a)), d: Math.round(num(so.d, 10, 1000, snd.d)),
+    s: num(so.s, 0, 1, snd.s), r: Math.round(num(so.r, 10, 1500, snd.r)),
+    ftype: FILTERS[so.filtre] ? so.filtre : snd.ftype, fcut: Math.round(num(so.coupure, 30, 16000, snd.fcut)),
+    fq: num(so.q, 0.1, 20, snd.fq), fenv: num(so.env, 0, 1, snd.fenv),
+  };
   return { cfg: {
-    slots: list,
+    slots: list, son,
     pas: Math.round(num(d.pas, 80, 700, 240)), tonique: Math.round(num(d.tonique, 0, 11, 0)),
     portee: num(d.portee, 1, 9, 2.5), mutation: !!d.mutation,
     amorce: Number.isFinite(d.amorce) && d.amorce >= 2 ? Math.min(128, Math.round(d.amorce)) : 0,
@@ -1017,6 +1068,7 @@ function applySetup(cfg) {
   opt.mutate = cfg.mutation; $('mutate').checked = opt.mutate;
   opt.loop = cfg.amorce > 0; $('loop').checked = opt.loop;
   if (opt.loop) { opt.loopN = cfg.amorce; $('loopN').value = opt.loopN; }
+  Object.assign(snd, cfg.son); showSound();
   slots.forEach((s, i) => {
     const c = cfg.slots[i];
     Object.assign(s, { gx: c.gx, gy: c.gy, lines: c.lines, initial: c.initial, mode: c.mode, channel: c.channel,
@@ -1179,6 +1231,108 @@ function openMenu(slot, x, y) {
 }
 document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+
+// ===== src/js/17-sound-ui.js =====
+//: Édition du son interne : onde, graphique ADSR (points déplaçables), filtre
+// ---------- Menu du son interne ----------
+const SND_DEFAULT = { ...snd };
+const envCv = $('envCv'), fltCv = $('fltCv');
+const fcutToHz = v => 30 * Math.pow(16000 / 30, v), hzToFcut = f => Math.log(f / 30) / Math.log(16000 / 30);
+const MAXA = 500, MAXD = 1000, MAXR = 1500;
+
+$('wave').innerHTML = Object.keys(WAVE_GAIN).map(w =>
+  `<option value="${w}">${{ square: 'carré', triangle: 'triangle', sawtooth: 'dent de scie', sine: 'sinus' }[w]}</option>`).join('');
+$('ftype').innerHTML = Object.entries(FILTERS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+
+// géométrie du graphique : quatre quarts de largeur, la tenue (S) a une largeur fixe
+function envPoints() {
+  const W = envCv.width, H = envCv.height, x0 = 10, qw = (W - 20) / 4, top = 12, bot = H - 12;
+  const xa = x0 + qw * snd.a / MAXA, xd = xa + qw * snd.d / MAXD, xs = xd + qw * 0.6, xr = xs + qw * snd.r / MAXR;
+  const ys = bot - (bot - top) * snd.s;
+  return { x0, qw, top, bot, pts: { a: [xa, top], d: [xd, ys], r: [xr, bot] }, xa, xd, xs, xr, ys };
+}
+function drawEnv() {
+  const c = envCv.getContext('2d'), g = envPoints();
+  c.clearRect(0, 0, envCv.width, envCv.height);
+  c.strokeStyle = '#2c2c34'; c.lineWidth = 1; c.beginPath();
+  for (const x of [g.xa, g.xd, g.xs]) { c.moveTo(x, g.top); c.lineTo(x, g.bot); }
+  c.stroke();
+  c.beginPath(); c.moveTo(g.x0, g.bot); c.lineTo(g.xa, g.top); c.lineTo(g.xd, g.ys); c.lineTo(g.xs, g.ys); c.lineTo(g.xr, g.bot);
+  c.fillStyle = 'rgba(255,176,0,.15)'; c.fill();
+  c.strokeStyle = '#ffb000'; c.lineWidth = 2; c.stroke();
+  c.fillStyle = '#e8e0c8';
+  for (const [x, y] of Object.values(g.pts)) { c.beginPath(); c.arc(x, y, 5, 0, 7); c.fill(); }
+}
+// courbe de réponse du filtre (échelle log en fréquence, de -40 à +24 dB)
+function drawFilter() {
+  const c = fltCv.getContext('2d'), W = fltCv.width, H = fltCv.height, n = 136;
+  c.clearRect(0, 0, W, H);
+  try {
+    const f = new OfflineAudioContext(1, 1, 44100).createBiquadFilter();
+    f.type = snd.ftype; f.frequency.value = snd.fcut; f.Q.value = snd.fq;
+    const fr = new Float32Array(n), mag = new Float32Array(n), ph = new Float32Array(n);
+    for (let i = 0; i < n; i++) fr[i] = 20 * Math.pow(1000, i / (n - 1));
+    f.getFrequencyResponse(fr, mag, ph);
+    const Y = m => H - 4 - (H - 8) * (Math.min(24, Math.max(-40, 20 * Math.log10(m || 1e-5))) + 40) / 64;
+    c.strokeStyle = '#2c2c34'; c.beginPath(); c.moveTo(0, Y(1)); c.lineTo(W, Y(1)); c.stroke();
+    c.beginPath();
+    for (let i = 0; i < n; i++) c[i ? 'lineTo' : 'moveTo'](W * i / (n - 1), Y(mag[i]));
+    c.strokeStyle = '#5fc8d8'; c.lineWidth = 2; c.stroke();
+    const xc = W * Math.log(snd.fcut / 20) / Math.log(1000);
+    c.strokeStyle = '#8a8574'; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(xc, 0); c.lineTo(xc, H); c.stroke(); c.setLineDash([]);
+  } catch (_) { /* pas d'OfflineAudioContext : graphique omis */ }
+}
+// met l'interface à jour depuis `snd` (après un réglage, un chargement ou une remise à zéro)
+function showSound() {
+  $('wave').value = snd.wave; $('ftype').value = snd.ftype;
+  $('envA').value = snd.a; $('envD').value = snd.d; $('envS').value = snd.s; $('envR').value = snd.r;
+  $('fcut').value = hzToFcut(snd.fcut); $('fq').value = snd.fq; $('fenv').value = snd.fenv;
+  $('oA').textContent = snd.a + ' ms'; $('oD').textContent = snd.d + ' ms';
+  $('oS').textContent = Math.round(snd.s * 100) + ' %'; $('oR').textContent = snd.r + ' ms';
+  $('oFc').textContent = Math.round(snd.fcut) + ' Hz'; $('oQ').textContent = snd.fq.toFixed(1);
+  $('oEnv').textContent = Math.round(snd.fenv * 100) + ' %';
+  drawEnv(); drawFilter();
+}
+const clampTo = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+$('wave').addEventListener('change', e => { snd.wave = e.target.value; showSound(); });
+$('ftype').addEventListener('change', e => { snd.ftype = e.target.value; showSound(); });
+$('envA').addEventListener('input', e => { snd.a = +e.target.value; showSound(); });
+$('envD').addEventListener('input', e => { snd.d = +e.target.value; showSound(); });
+$('envS').addEventListener('input', e => { snd.s = +e.target.value; showSound(); });
+$('envR').addEventListener('input', e => { snd.r = +e.target.value; showSound(); });
+$('fcut').addEventListener('input', e => { snd.fcut = Math.round(fcutToHz(+e.target.value)); showSound(); });
+$('fq').addEventListener('input', e => { snd.fq = +e.target.value; showSound(); });
+$('fenv').addEventListener('input', e => { snd.fenv = +e.target.value; showSound(); });
+$('soundReset').addEventListener('click', () => { Object.assign(snd, SND_DEFAULT); showSound(); });
+
+// points déplaçables : A (abscisse), D et S (abscisse et ordonnée), R (abscisse)
+let envDrag = null;
+function envXY(e) {
+  const r = envCv.getBoundingClientRect();
+  return [(e.clientX - r.left) * envCv.width / r.width, (e.clientY - r.top) * envCv.height / r.height];
+}
+envCv.addEventListener('pointerdown', e => {
+  const [x, y] = envXY(e), g = envPoints();
+  let best = null, bd = 18;
+  for (const [k, [px, py]] of Object.entries(g.pts)) { const d = Math.hypot(x - px, y - py); if (d < bd) { bd = d; best = k; } }
+  if (!best) return;
+  envDrag = best;
+  try { envCv.setPointerCapture(e.pointerId); } catch (_) { /* ignoré */ }
+});
+envCv.addEventListener('pointermove', e => {
+  if (!envDrag) return;
+  const [x, y] = envXY(e), g = envPoints();
+  if (envDrag === 'a') snd.a = Math.round(clampTo((x - g.x0) / g.qw * MAXA, 1, MAXA));
+  else if (envDrag === 'd') {
+    snd.d = Math.round(clampTo((x - g.xa) / g.qw * MAXD, 10, MAXD));
+    snd.s = Math.round(clampTo((g.bot - y) / (g.bot - g.top), 0, 1) * 100) / 100;
+  } else snd.r = Math.round(clampTo((x - g.xs) / g.qw * MAXR, 10, MAXR));
+  showSound();
+});
+const envUp = () => { envDrag = null; };
+envCv.addEventListener('pointerup', envUp);
+envCv.addEventListener('pointercancel', envUp);
+showSound();
 
 // ===== src/js/99-start.js =====
 //: Démarrage de l'animation

@@ -5,6 +5,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hexacorde</title>
+<meta name="description" content="Hexacorde : séquenceur oraculaire, six hexagrammes du Yi Jing sur une grille, en HTML et JavaScript purs.">
+<meta property="og:title" content="Hexacorde">
+<meta property="og:description" content="Séquenceur oraculaire : six hexagrammes du Yi Jing s'envoient des notes sur une grille.">
+<meta property="og:type" content="website">
 <style>
 /*@@CSS@@*/
 </style>
@@ -35,6 +39,21 @@
     <select id="midiOut" disabled style="flex:1;min-width:0"><option value="">(aucune sortie)</option></select></div>
   <div class="row"><label><input id="internal" type="checkbox" checked> Son interne</label>
     <span id="midiMsg" class="hint"></span></div>
+  <details id="sound"><summary>Son interne : édition</summary>
+    <div class="row"><label>Onde <select id="wave"></select></label></div>
+    <canvas id="envCv" width="272" height="110" title="Glisser les points : A, D + S, R"></canvas>
+    <div class="sl"><span>A</span><input id="envA" type="range" min="1" max="500"><output id="oA"></output></div>
+    <div class="sl"><span>D</span><input id="envD" type="range" min="10" max="1000"><output id="oD"></output></div>
+    <div class="sl"><span>S</span><input id="envS" type="range" min="0" max="1" step="0.01"><output id="oS"></output></div>
+    <div class="sl"><span>R</span><input id="envR" type="range" min="10" max="1500"><output id="oR"></output></div>
+    <div class="csep"></div>
+    <div class="row"><label>Filtre <select id="ftype"></select></label></div>
+    <canvas id="fltCv" width="272" height="80"></canvas>
+    <div class="sl"><span>Fc</span><input id="fcut" type="range" min="0" max="1" step="0.001"><output id="oFc"></output></div>
+    <div class="sl"><span>Q</span><input id="fq" type="range" min="0.1" max="20" step="0.1"><output id="oQ"></output></div>
+    <div class="sl" title="Profondeur de l'enveloppe qui ouvre le filtre (suit A D S R)"><span>Env</span><input id="fenv" type="range" min="0" max="1" step="0.01"><output id="oEnv"></output></div>
+    <button id="soundReset">Son par défaut</button>
+  </details>
   <div class="row"><label><input id="rec" type="checkbox"> Enregistrer en fichier MIDI</label></div>
   <div class="row"><label style="flex:1">Nom
     <input id="recName" type="text" value="hexacorde" style="flex:1;min-width:0"></label></div>

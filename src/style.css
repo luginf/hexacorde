@@ -48,7 +48,7 @@
   #ctxMenu .cform > span { color: var(--dim); }
   #ctxMenu .cform > select { width: 100%; min-width: 0; }
   #ctxMenu .cform .crow { margin: 0; }
-  #ctxMenu .csep { border-top: 1px solid #2c2c34; margin: 8px 0 4px; }
+  #ctxMenu .csep, #sound .csep { border-top: 1px solid #2c2c34; margin: 8px 0 4px; }
   #ctxMenu .cgrid b { color: var(--dim); font-weight: 600; }
   #ctxMenu .cgrid span { color: var(--dim); }
   #ctxMenu select { padding: 1px 3px; min-width: 0; }
@@ -66,3 +66,9 @@
     body { grid-template-columns: 1fr; height: auto; }
     svg { max-height: none; }
   }
+
+  #sound canvas { display: block; width: 100%; background: #101014; border: 1px solid #2c2c34; border-radius: 4px; margin: 6px 0; touch-action: none; }
+  .sl { display: flex; gap: 6px; align-items: center; margin: 3px 0; }
+  .sl span { width: 1.8em; color: var(--dim); font-weight: 700; }
+  .sl input { flex: 1; min-width: 0; }
+  .sl output { width: 5.5em; text-align: right; font-size: 12px; color: var(--dim); }
