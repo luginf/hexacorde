@@ -1,10 +1,17 @@
 # Hexacorde
 
-Séquenceur oraculaire en HTML + JS pur (un seul fichier, `index.html`, aucune dépendance). Six hexagrammes du Yi Jing (on peut en ajouter jusqu'à 26 et agrandir la grille jusqu'à 12x12) sont posés sur une grille de 6x6 points par défaut. Chaque trait joué envoie une impulsion vers un autre hexagramme, et les impulsions se répercutent de proche en proche.
+Séquenceur oraculaire en HTML + JS pur (un seul fichier, `docs/index.html`, aucune dépendance). Six hexagrammes du Yi Jing (on peut en ajouter jusqu'à 26 et agrandir la grille jusqu'à 12x12) sont posés sur une grille de 6x6 points par défaut. Chaque trait joué envoie une impulsion vers un autre hexagramme, et les impulsions se répercutent de proche en proche.
 
 L'interface est bilingue (ENG par défaut, FRA) avec 4 thèmes (sombre, clair, sépia, vert), voir « Langue et thème ». Le son interne est un oscillateur WebAudio (carré par défaut, triangle, dent de scie, sinus) avec enveloppe ADSR et filtre réglables, désactivable. La sortie MIDI en direct (Web MIDI) vers un synthé externe (JV-880, D110...) et l'export en fichier .mid existent (voir plus bas). Une version uxn est envisagée plus tard.
 
 Fonctions actuelles : 6 hexagrammes (ajout, désactivation, suppression) sur grille de 3x3 à 12x12 (6x6 au départ), amorce périodique par hexagone, rotation à la souris en glissant un trait, propagation d'impulsions, choix de l'hexagramme parmi les 64 avec son nom du Yi Jing, chromatique ou gammes par hexagone, notes personnalisées par hexagone, tonique globale, rotation individuelle (vitesse et sens) et rotation manuelle, réinitialisation individuelle, sauvegarde et chargement de setups (mémoire, fichier, texte), mutation des traits, amorce automatique, tirage et placement aléatoires, sortie MIDI en direct, enregistrement vers un fichier MIDI et audio (.flac, .wav). Voir `README.md` (anglais, version par défaut) et `README.fr.md` (français) pour la présentation côté utilisateur. **Les deux README doivent être mis à jour ensemble** à chaque changement de fonction.
+
+## Organisation du dépôt
+Trois parties, chacune dans son dossier (ne pas les mélanger) :
+- `docs/` : l'application web (le dossier est `docs/` parce que GitHub Pages ne sait servir que `/` ou `/docs` depuis une branche). Sources dans `docs/src/` (`template.html`, `style.css`, `js/NN-*.js`), page générée `docs/index.html` (commitée, pour pouvoir l'ouvrir depuis le dossier), intermédiaire `docs/build/` (ignoré).
+- `core/` : le cœur C++ (voir plus bas), avec son test de fidélité contre l'application web.
+- `vcv/` : le module VCV Rack, construit sur `core/`.
+À la racine : `Makefile` (cibles `web`, `check`, `serve`, `core-test`, `core-ref`, `vcv`, `clean`), `README.md` / `README.fr.md`, `CLAUDE.md`, `LICENSE`, `.nojekyll` est dans `docs/`.
 
 ## Conventions de conception
 
@@ -79,13 +86,18 @@ Fonctions actuelles : 6 hexagrammes (ajout, désactivation, suppression) sur gri
 - **MIDI** : format 1, 480 PPQ. Piste 0 = tempo et signature 4/4. Ensuite une piste par hexagone ayant sonné, **canal = canal choisi pour l'hexagone**, noté dans chaque événement au moment où il est joué. Nom de piste : `Hexacorde A <gamme>`. Un pas de simulation = une croche (240 ticks), donc tempo = `2 * tickMs` ms par noire ; les changements de pas deviennent des événements de tempo. Événements stockés par numéro de pas (aucune gigue), silence de tête supprimé à l'export. Vélocité : plein 96, brisé 56 ; durée 90 % d'un pas. Code : `beginRecording`, `recNote`, `recTempo`, `buildMidi`, `finishRecording` (07-midi-file.js).
 - **Audio** : un `ScriptProcessor` (4096, mono) branché sur `master` capte des blocs `Int16Array` dans `arec` (rien avant le premier Jouer : `arec.started`). Sortie en `.flac` (`encodeFlac`, encodeur maison dans `18-audio-encode.js` : trames de 4096, prédicteurs fixes d'ordre 0 à 4, codage de Rice partitionné, sous-trame constante pour le silence, CRC-8 / CRC-16, MD5 non calculée donc `flac -t` avertit sans échouer) ou `.wav` (`encodeWav`, PCM 16 bits). Vérifié avec `flac -t` et décodage identique au WAV. Le son capté est celui d'après le volume, et muet si « Son interne » est décoché.
 
-## Code et build
-**`index.html` est généré : ne pas l'éditer à la main.** Les sources sont dans `src/` et `make` les assemble (il est conservé dans le dossier pour pouvoir simplement l'ouvrir).
+## Cœur C++ (`core/`) et module VCV Rack (`vcv/`)
+- `core/` : moteur C++17 sans dépendance, portage fidèle de `docs/src/js/01` à `06` et `15` (voir `core/README.md`). `hexacorde.hpp` (`Engine`, `step()` renvoie les `NoteEvent`), `setup.hpp` (même format JSON et mêmes vérifications que `parseSetup` / `getSetup`), `json.hpp` (mini JSON). `tables.hpp` est **généré** par `core/gen_tables.js` depuis `docs/src/js/01-constants.js`, `02-hexagrams.js` et les dictionnaires 00b / 00c (gammes avec noms, table du Roi Wen, noms des hexagrammes) : ne jamais l'éditer à la main, `make` le régénère. **Toute modification du comportement du moteur JS (`04` à `06`, `15`) doit être répercutée dans le C++**, puis `make core-ref` (régénère `core/test/ref.txt` avec Chrome) et `make core-test` (8 scénarios dont la suite de notes du JS est rejouée à l'identique, réécriture du setup à l'identique, notes personnalisées sur les 23 gammes). Le son (`Sound`, `chanSound`) et les instruments (`program`) ne sont que des données de setup dans le cœur.
+- `vcv/` : module VCV Rack 2 (Rack SDK 2.6.x, `~/src/rack/Rack-SDK`, hors dépôt). `Makefile` (C++17 imposé après `plugin.mk`), `src/Hexacorde.cpp` (module, `BoardWidget` dessiné en NVG avec les mêmes unités que le SVG web, menus contextuels), `res/Hexacorde.svg` (panneau 26 HP sans texte : les étiquettes sont dessinées par `LabelsWidget`). Le fil audio ne touche au moteur qu'aux pas et aux déclenchements, sous `std::mutex` (`Hexacorde::edit` pour les modifications venant de l'interface, qui met aussi `nOut` à jour). Sorties poly : un canal par hexagone (16 au plus). Sauvegarde : `dataToJson` écrit le setup web dans la clé `setup`. Variable d'environnement `HEXACORDE_DEBUG` : trace chaque note dans le journal de Rack.
+- **Tester le module sans interface** : `make install RACK_DIR=... RACK_USER_DIR=/tmp/rackuser`, fabriquer un patch (`patch.json` avec le module, `data.setup` avec `amorce` pour qu'il joue seul, puis `tar --zstd -cf patch.vcv patch.json`), puis `HEXACORDE_DEBUG=1 ./Rack -h -s <Rack2Free> -u /tmp/rackuser patch.vcv` pendant quelques secondes et lire `/tmp/rackuser/log.txt` (vérifié : horloge, notes, gates). Avec écran virtuel : `xvfb-run` + `LIBGL_ALWAYS_SOFTWARE=1 ./Rack ...` + `xdotool` (laisser 0,5 s entre `mousemove` et `click`, fermer la boîte de dialogue du premier lancement) + `import -window root` pour une capture.
 
-- `src/template.html` : le HTML, avec deux repères `/*@@CSS@@*/` et `//@@JS@@`.
-- `src/style.css` : le CSS.
-- `src/js/NN-nom.js` : le JS, concaténé **dans l'ordre des numéros** par le `Makefile` à l'intérieur d'une seule fonction `(() => { 'use strict'; ... })();`. Les fichiers partagent donc la même portée (pas de `import` / `export`) : ils ne sont pas isolés, mais chacun a une responsabilité. Un fichier ne doit utiliser au chargement que ce que les fichiers précédents ont défini (les fonctions et gestionnaires peuvent, eux, appeler des choses définies plus loin, puisqu'ils s'exécutent après le chargement).
-- `Makefile` : `make` (construit `index.html`), `make check` (`node --check` sur le JS assemblé), `make serve` (serveur local sur le port 8000, nécessaire à Firefox pour Web MIDI), `make clean` (supprime `build/`). `build/app.js` est le JS assemblé intermédiaire.
+## Code et build
+**`docs/index.html` est généré : ne pas l'éditer à la main.** Les sources sont dans `docs/src/` et `make` les assemble (il est conservé dans le dépôt pour pouvoir simplement l'ouvrir).
+
+- `docs/src/template.html` : le HTML, avec deux repères `/*@@CSS@@*/` et `//@@JS@@`.
+- `docs/src/style.css` : le CSS.
+- `docs/src/js/NN-nom.js` : le JS, concaténé **dans l'ordre des numéros** par le `Makefile` à l'intérieur d'une seule fonction `(() => { 'use strict'; ... })();`. Les fichiers partagent donc la même portée (pas de `import` / `export`) : ils ne sont pas isolés, mais chacun a une responsabilité. Un fichier ne doit utiliser au chargement que ce que les fichiers précédents ont défini (les fonctions et gestionnaires peuvent, eux, appeler des choses définies plus loin, puisqu'ils s'exécutent après le chargement).
+- `Makefile` (à la racine) : `make` (construit `docs/index.html`), `make check` (`node --check` sur le JS assemblé), `make serve` (sert `docs/` sur le port 8000, nécessaire à Firefox pour Web MIDI), `make clean` (supprime `docs/build/` et `core/build/`). `docs/build/app.js` est le JS assemblé intermédiaire (ignoré par git).
 
 Fichiers JS, dans l'ordre :
 | Fichier | Rôle |
@@ -115,7 +127,7 @@ Fichiers JS, dans l'ordre :
 | `16-menu.js` | menus du clic droit (hexagone et grille) |
 | `99-start.js` | lance l'animation |
 
-Pour ajouter un module : créer `src/js/NN-nom.js` (numéro entre ceux des fichiers dont il dépend et de ceux qui l'utilisent) avec une première ligne `//: description`, puis `make`. Comme tout est dans une seule portée, deux fichiers ne peuvent pas déclarer le même nom.
+Pour ajouter un module : créer `docs/src/js/NN-nom.js` (numéro entre ceux des fichiers dont il dépend et de ceux qui l'utilisent) avec une première ligne `//: description`, puis `make`. Comme tout est dans une seule portée, deux fichiers ne peuvent pas déclarer le même nom.
 
 Points d'attention :
 - Dans `step`, chaque note jouée passe par `playNote`, `midiNote` et `recNote` avec le même `midi` calculé par `midiOf(slot, off)`.
@@ -138,7 +150,7 @@ Trois recherches rapides (outil limité aux résultats américains, donc non exh
 
 ## Tester
 - Construire puis vérifier la syntaxe : `make && make check`.
-- Navigateur headless : `google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=... --screenshot=...`. Le temps virtuel rend l'horloge peu fiable : pour valider la logique, faire une copie de `index.html` où l'on remplace la dernière ligne `requestAnimationFrame(frame);` suivie de `})();` par un `window.__t = { step, slots, getSetup, parseSetup, ... }` (tout est dans une même portée, donc rien n'est exposé par défaut), puis appeler `step()` en boucle et lire le résultat dans `document.title` avec `--dump-dom`. L'audio exige un vrai geste utilisateur, donc il ne s'entend pas en headless.
+- Navigateur headless : `google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=... --screenshot=...`. Le temps virtuel rend l'horloge peu fiable : pour valider la logique, faire une copie de `docs/index.html` où l'on remplace la dernière ligne `requestAnimationFrame(frame);` suivie de `})();` par un `window.__t = { step, slots, getSetup, parseSetup, ... }` (tout est dans une même portée, donc rien n'est exposé par défaut), puis appeler `step()` en boucle et lire le résultat dans `document.title` avec `--dump-dom`. L'audio exige un vrai geste utilisateur, donc il ne s'entend pas en headless.
 - Test de l'accès MIDI : sans matériel, injecter un faux port dans la copie de test (`midiOut = { send(msg, t) {...} }`) et lire les messages.
 - Menu du clic droit : déclencher un `MouseEvent('contextmenu', ...)` sur le groupe SVG d'un hexagone (`polygon.parentNode`).
 - Firefox : `firefox --headless --screenshot ...` fonctionne pour tester ce qui dépend du navigateur (c'est ainsi qu'a été trouvé le problème de Web MIDI en `file://`).
@@ -153,7 +165,7 @@ Trois recherches rapides (outil limité aux résultats américains, donc non exh
 
 ## Publication (GitHub Pages)
 
-- Le site est `index.html` à la racine, servi tel quel par GitHub Pages (Settings, Pages, Deploy from a branch, `main`, `/ (root)`). `.nojekyll` désactive Jekyll. Aucun workflow : `index.html` est généré en local par `make` et **doit être commité** avec `src/`.
+- Le site est `docs/index.html`, servi tel quel par GitHub Pages (Settings, Pages, Deploy from a branch, `main`, `/docs`) à https://luginf.github.io/hexacorde/. `docs/.nojekyll` désactive Jekyll. Aucun workflow : `docs/index.html` est généré en local par `make` et **doit être commité** avec `docs/src/`. `core/` et `vcv/` sont hors de `docs/`, donc non servis (les sources web `docs/src/`, elles, le sont, ce qui est sans importance). GitHub Pages ne sait pas servir un autre dossier que `/` ou `/docs`, ne pas déplacer la page ailleurs.
 - En HTTPS, Web MIDI fonctionne dans Firefox (contrairement à `file://`).
-- L'interface et les clés du setup restent en français ; seuls les README sont bilingues.
+- L'interface est bilingue (ENG / FRA, voir « Langue et thème ») ; les clés du setup restent en français ; les README sont bilingues, `CLAUDE.md` est en français.
 - Licence : BSD 3 clauses (`LICENSE`, copyright 2026 luginf), mentionnée dans les deux README.

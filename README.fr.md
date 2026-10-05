@@ -8,9 +8,19 @@ Une seule page HTML, du JavaScript pur, aucune dépendance, aucun serveur. L'int
 
 **À essayer en ligne** : [https://luginf.github.io/hexacorde/](https://luginf.github.io/hexacorde/)
 
+### Contenu du dépôt
+
+| Dossier | Contenu |
+|---|---|
+| `docs/` | **la version web**, publiée sur GitHub Pages à https://luginf.github.io/hexacorde/ (`docs/index.html` est la page, `docs/src/` ses sources) |
+| `core/` | le cœur C++17 du séquenceur, sans dépendance (portage du moteur web, vérifié contre lui) |
+| `vcv/` | le module VCV Rack 2, construit sur `core/` |
+
+La suite de ce README décrit la version web.
+
 ## Lancer
 
-Ouvrir `index.html` dans un navigateur récent (Chrome, Firefox...), puis cliquer sur un hexagone. Cela l'amorce et lance l'horloge. Le son interne est un oscillateur dont on peut changer l'onde, l'enveloppe et le filtre.
+Ouvrir `docs/index.html` dans un navigateur récent (Chrome, Firefox...), puis cliquer sur un hexagone. Cela l'amorce et lance l'horloge. Le son interne est un oscillateur dont on peut changer l'onde, l'enveloppe et le filtre.
 
 ## Prise en main
 
@@ -148,6 +158,10 @@ Détails du fichier MIDI :
 - Une piste de tempo, puis une piste par hexagone ayant sonné, avec le canal choisi pour chaque hexagone (A = canal 1, B = canal 2, ... par défaut).
 - Vélocité 96 pour un trait plein, 56 pour un trait brisé.
 
+## Cœur C++ et module VCV Rack
+
+En plus de la page web, le séquenceur existe sous forme d'un **cœur C++17** sans dépendance (`core/`, portage fidèle du moteur JavaScript, vérifié note par note contre la page web par `make core-test`) et, construit dessus, d'un **module pour VCV Rack 2** (`vcv/`) : un séquenceur polyphonique pitch / gate / vélocité dont on joue le plateau comme sur la page web, avec import et export des mêmes fichiers de setup `.json`. Voir `core/README.md` et `vcv/README.md`. Un plugin JUCE ou DPF pourrait utiliser le même cœur.
+
 ## À venir
 
 - Program change et bank select par canal (choisir les patchs du JV-880), horloge MIDI.
@@ -156,17 +170,17 @@ Détails du fichier MIDI :
 
 ## Publier sur GitHub Pages
 
-La page est un seul fichier statique, `index.html`, à la racine du dépôt (il est généré par `make` et doit être commité). Un fichier `.nojekyll` évite le traitement Jekyll.
+La version web est dans le dossier `docs/` (le seul dossier que GitHub Pages sait servir, avec la racine du dépôt) : `docs/index.html` est un seul fichier statique, généré par `make` depuis `docs/src/` et commité. Un fichier `.nojekyll` dans `docs/` évite le traitement Jekyll. `core/` et `vcv/` sont hors de `docs/`, donc ils ne sont pas servis.
 
 1. Pousser le dépôt sur GitHub, branche `main`.
-2. Dans le dépôt : **Settings, Pages, Build and deployment, Source : Deploy from a branch**, branche `main`, dossier `/ (root)`.
-3. La page est servie sur `https://<utilisateur>.github.io/<dépôt>/`.
+2. Dans le dépôt : **Settings, Pages, Build and deployment, Source : Deploy from a branch**, branche `main`, dossier `/docs`.
+3. La page est servie sur `https://<utilisateur>.github.io/<dépôt>/` (ici : https://luginf.github.io/hexacorde/).
 
-Bonus : en HTTPS, Web MIDI fonctionne aussi dans Firefox (qui le refuse en `file://`), avec une demande d'autorisation du navigateur. Après une modification du code, lancer `make` et commiter `index.html` avec les sources.
+Bonus : en HTTPS, Web MIDI fonctionne aussi dans Firefox (qui le refuse en `file://`), avec une demande d'autorisation du navigateur. Après une modification du code, lancer `make` et commiter `docs/index.html` avec les sources.
 
 ## Notes pour les développeurs
 
-Le code est découpé en modules dans `src/` (`src/js/*.js`, `src/style.css`, `src/template.html`). **`index.html` est généré** : après une modification, lancer `make` (et `make check` pour vérifier la syntaxe). `make serve` sert le dossier sur `http://localhost:8000` (utile pour Web MIDI dans Firefox). Les textes de l'interface sont dans `src/js/00b-lang-en.js` et `src/js/00c-lang-fr.js` ; les thèmes sont des variables CSS dans `src/style.css`.
+Le dépôt a trois parties : `docs/` (l'application web : sources dans `docs/src/`, page générée `docs/index.html`), `core/` (le cœur C++) et `vcv/` (le module VCV Rack). Le code web est découpé en modules dans `docs/src/` (`docs/src/js/*.js`, `docs/src/style.css`, `docs/src/template.html`). **`docs/index.html` est généré** : après une modification, lancer `make` (et `make check` pour vérifier la syntaxe). `make serve` sert `docs/` sur `http://localhost:8000` (utile pour Web MIDI dans Firefox). Les textes de l'interface sont dans `docs/src/js/00b-lang-en.js` et `docs/src/js/00c-lang-fr.js` ; les thèmes sont des variables CSS dans `docs/src/style.css`.
 
 Voir `CLAUDE.md` pour le détail des règles de conception, de la structure du code et de la façon de tester.
 
