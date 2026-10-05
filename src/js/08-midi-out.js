@@ -4,7 +4,7 @@ let midiAccess = null, midiOut = null;
 
 function midiNote(slot, midi, vel) {
   if (!midiOut) return;
-  const ch = slot.channel;
+  const ch = chanOf(slot);
   try {
     midiOut.send([0x90 | ch, midi, vel]);
     // le note off est planifié par le navigateur : 90 % d'un pas plus tard
@@ -15,4 +15,11 @@ function midiNote(slot, midi, vel) {
 function midiPanic() {
   if (!midiOut) return;
   try { for (let ch = 0; ch < 16; ch++) midiOut.send([0xb0 | ch, 123, 0]); } catch (_) { /* port fermé */ }
+}
+
+// instruments (program change) par canal : prog[ch] = 0..127 ou null (rien n'est envoyé)
+const prog = Array(16).fill(null);
+function sendPrograms() {
+  if (!midiOut) return;
+  try { prog.forEach((p, ch) => { if (p !== null) midiOut.send([0xc0 | ch, p]); }); } catch (_) { /* port fermé */ }
 }

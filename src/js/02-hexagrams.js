@@ -1,4 +1,4 @@
-//: Les 64 hexagrammes du Yi Jing : tables, numéro et nom, traits (aucune dépendance)
+//: Les 64 hexagrammes du Yi Jing : tables, numéro et nom (anglais et français), traits (dépend de la langue courante)
 // ---------- Les 64 hexagrammes (ordre du Roi Wen) ----------
 // trigrammes dans l'ordre Qian, Zhen, Kan, Gen, Kun, Xun, Li, Dui ; KW[inférieur][supérieur]
 // Les traits sont lus du trait 1 (bas dans la tradition) au trait 3 pour le trigramme inférieur.
@@ -46,4 +46,18 @@ for (let a = 0; a < 64; a++) {
   const lines = [5, 4, 3, 2, 1, 0].map(i => (a >> i) & 1);
   HEX_LINES[hexNumber(lines)] = lines;
 }
-const hexLabel = n => `${n}. ${HEX_NAMES[n][0]}, ${HEX_NAMES[n][1]}`;
+// noms anglais (Wilhelm / Baynes) ; HEX_NAMES[n][1] donne le nom français
+const HEX_EN = [null,
+  'The Creative', 'The Receptive', 'Difficulty at the Beginning', 'Youthful Folly', 'Waiting', 'Conflict', 'The Army',
+  'Holding Together', 'Small Taming', 'Treading', 'Peace', 'Standstill', 'Fellowship with Men', 'Possession in Great Measure',
+  'Modesty', 'Enthusiasm', 'Following', 'Work on What Has Been Spoiled', 'Approach', 'Contemplation', 'Biting Through',
+  'Grace', 'Splitting Apart', 'Return', 'Innocence', 'Great Taming', 'Nourishment', 'Preponderance of the Great',
+  'The Abysmal', 'The Clinging, Fire', 'Influence', 'Duration', 'Retreat', 'The Power of the Great', 'Progress',
+  'Darkening of the Light', 'The Family', 'Opposition', 'Obstruction', 'Deliverance', 'Decrease', 'Increase',
+  'Breakthrough', 'Coming to Meet', 'Gathering Together', 'Pushing Upward', 'Oppression', 'The Well', 'Revolution',
+  'The Cauldron', 'The Arousing, Thunder', 'Keeping Still, Mountain', 'Development', 'The Marrying Maiden', 'Abundance',
+  'The Wanderer', 'The Gentle, Wind', 'The Joyous, Lake', 'Dispersion', 'Limitation', 'Inner Truth',
+  'Preponderance of the Small', 'After Completion', 'Before Completion',
+];
+const hexName = n => (lang === 'fr' ? HEX_NAMES[n][1] : HEX_EN[n]);
+const hexLabel = n => `${n}. ${HEX_NAMES[n][0]}, ${hexName(n)}`;

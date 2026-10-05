@@ -9,7 +9,7 @@ function beginRecording() {
   rec = { events: [], tempos: [{ step: tick, ms: tickMs }], live: true };
 }
 function recNote(slot, midi, vel) {
-  if (rec && rec.live) rec.events.push({ step: tick, slot: slot.id, ch: slot.channel, midi, vel });
+  if (rec && rec.live) rec.events.push({ step: tick, slot: slot.id, ch: chanOf(slot), midi, vel });
 }
 function recTempo() {
   if (rec && rec.live) rec.tempos.push({ step: tick, ms: tickMs });
@@ -48,6 +48,8 @@ function buildMidi(r) {
     const mine = r.events.filter(e => e.slot === slot.id);
     if (!mine.length) continue;
     const ev = [{ t: 0, order: 0, bytes: metaText(0x03, `Hexacorde ${slot.label} ${slot.mode}`) }];
+    const pc = prog[mine[0].ch];             // instrument du canal au moment de l'export
+    if (pc !== null) ev.push({ t: 0, order: 0, bytes: [0xc0 | mine[0].ch, pc] });
     for (const e of mine) {
       const t = (e.step - base) * STEP_TICKS;
       ev.push({ t, order: 1, bytes: [0x90 | e.ch, e.midi, e.vel] });

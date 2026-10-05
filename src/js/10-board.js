@@ -8,14 +8,13 @@ const el = (name, attrs = {}, parent) => {
   return e;
 };
 
-// points de la grille ; la taille du plateau suit N
+// points de la grille ; la taille du plateau suit NX et NY
 const gridLayer = el('g', {}, svg);
 function drawGrid() {
-  const W = 2 * M + (N - 1) * S;
-  svg.setAttribute('viewBox', `0 0 ${W} ${W}`);
-  svg.setAttribute('aria-label', `Grille ${N}x${N} d'hexagrammes`);
+  svg.setAttribute('viewBox', `0 0 ${2 * M + (NX - 1) * S} ${2 * M + (NY - 1) * S}`);
+  svg.setAttribute('aria-label', t('grid.aria', NX, NY));
   while (gridLayer.firstChild) gridLayer.removeChild(gridLayer.firstChild);
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++)
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++)
     el('circle', { cx: px(x), cy: px(y), r: 2.5, fill: 'var(--grid)' }, gridLayer);
 }
 drawGrid();
@@ -49,15 +48,15 @@ function drawSlot(slot) {
 
   const n = slot.n;
   const pts = Array.from({ length: n }, (_, k) => vertexAt(270 + sideAng(k, n) - 180 / n).join(',')).join(' ');
-  const body = el('polygon', { points: pts, fill: '#1c1c22', stroke: slot.sel ? 'var(--yang)' : '#2a2a33', 'stroke-width': slot.sel ? 2.5 : 1 }, g);
+  const body = el('polygon', { points: pts, fill: 'var(--body)', stroke: slot.sel ? 'var(--yang)' : 'var(--edge)', 'stroke-width': slot.sel ? 2.5 : 1 }, g);
   body.addEventListener('pointerdown', e => beginDrag(e, slot));
 
   el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
-               'font-size': 15, fill: '#4a4a56', 'font-weight': 700, 'pointer-events': 'none' }, g)
+               'font-size': 15, fill: 'var(--glyph)', 'font-weight': 700, 'pointer-events': 'none' }, g)
     .textContent = slot.label;
   el('text', { x: 0, y: 13, 'text-anchor': 'middle', 'dominant-baseline': 'middle',
-               'font-size': 7, fill: '#4a4a56', 'pointer-events': 'none' }, g)
-    .textContent = SCALES[slot.mode].short;
+               'font-size': 7, fill: 'var(--glyph)', 'pointer-events': 'none' }, g)
+    .textContent = scaleShort(slot.mode);
 
   // numéro et nom de l'hexagramme sous l'hexagone
   const hn = hexOf(slot);

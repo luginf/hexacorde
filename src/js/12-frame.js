@@ -33,9 +33,9 @@ function frame(now) {
       slot.labelEls[k].setAttribute('fill', f > 0 ? 'var(--ink)' : 'var(--dim)');
     }
   }
-  $status.textContent = `pas ${tick} · impulsions ${pulses.length}` +
-    (rec ? ` · MIDI ${rec.events.length} notes${rec.live ? '' : ' (arrêté)'}` : '') +
-    (arec ? ` · audio ${(arec.n / ac.sampleRate).toFixed(1)} s${arec.live ? '' : ' (arrêté)'}` : '');
+  $status.textContent = t('status', tick, pulses.length) +
+    (rec ? t('status.midi', rec.events.length) + (rec.live ? '' : t('status.stopped')) : '') +
+    (arec ? t('status.audio', (arec.n / ac.sampleRate).toFixed(1)) + (arec.live ? '' : t('status.stopped')) : '');
   $recSave.disabled = !(rec && rec.events.length);
   $arecSave.disabled = !(arec && arec.n);
   requestAnimationFrame(frame);

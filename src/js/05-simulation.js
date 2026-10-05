@@ -3,9 +3,9 @@
 const pcOf = (k, line) => 2 * k + (line ? 0 : 1);
 // décalage en demi-tons depuis la tonique pour le côté k, ou null si le côté est muet
 // note par défaut du trait k selon la gamme (line = 1 plein, 0 brisé)
-// Heptagone : une gamme pentatonique est complétée par les 2 notes de la gamme à 7 notes de même couleur
-// (majeur pour la pentatonique majeure, mineur naturel pour la mineure), au lieu de répéter des octaves.
-const HEPTA = { pentamajeur: 'majeur', pentamineur: 'mineur' };
+// Heptagone : une gamme de moins de 7 notes est complétée par les notes manquantes d'une gamme à 7 notes
+// de même couleur (table HEPTA, ex. majeur pour la pentatonique majeure), au lieu de répéter des octaves.
+const HEPTA = { pentamajeur: 'majeur', pentamineur: 'mineur', blues: 'mineur', tons: 'lydien', insen: 'phrygien', hirajoshi: 'mineur', augmentee: 'lydien' };
 function scaleSteps(slot) {
   const steps = SCALES[slot.mode].steps;
   if (!steps || slot.n < 7 || steps.length >= 7 || !HEPTA[slot.mode]) return steps;
@@ -35,8 +35,11 @@ function offsetOf(slot, k) {
   return defaultOffset(slot, k, line);
 }
 const slotTonic = slot => (slot.tonic === null ? opt.tonic : slot.tonic);
+// octave de la rangée : la grille est répartie sur 3 octaves (rangées du bas graves, du haut aiguës) ;
+// avec l'option « octave uniforme », toutes les rangées sont à l'octave du milieu
+const rowOctave = slot => (opt.uniform ? 1 : Math.floor((NY - 1 - slot.gy) * 3 / NY));
 const midiOf = (slot, off) => Math.max(0, Math.min(127,
-  48 + 12 * (Math.floor((5 - slot.gy) / 2) + opt.octave + slot.octave) + slotTonic(slot) + off));
+  48 + 12 * (rowOctave(slot) + opt.octave + slot.octave) + slotTonic(slot) + off));
 
 // "to" est-il dans le secteur de `from` centré sur la direction ang (degrés depuis le haut, sens horaire) ?
 // secteur demi-ouvert de largeur 360 / n, donc l'horizontale exacte d'un hexagone va au secteur du bas
@@ -103,7 +106,7 @@ function step() {
     const k = slot.ph.side, line = slot.lines[k], off = offsetOf(slot, k);
     if (off !== null) {
       const midi = midiOf(slot, off);
-      playNote(midi, line ? 0.16 : 0.08);
+      playNote(midi, line ? 0.16 : 0.08, chanOf(slot));
       midiNote(slot, midi, line ? 96 : 56);
       recNote(slot, midi, line ? 96 : 56);
       slot.flash[k] = tick;

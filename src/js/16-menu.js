@@ -8,11 +8,11 @@ document.body.appendChild(menu);
 const noteOpts = (slot, withSilence, sel) => {
   if (sel === undefined) sel = null;
   const steps = scaleSteps(slot);
-  let h = withSilence ? `<option value=""${sel === null ? ' selected' : ''}>· silence</option>` : '';
+  let h = withSilence ? `<option value=""${sel === null ? ' selected' : ''}>${t('m.silence')}</option>` : '';
   for (let i = 0; i < 24; i++) {
     const cls = !steps || steps.includes(i % 12) ? 'in' : 'out';
-    const st = cls === 'in' ? 'color:#ffb000;font-weight:700' : 'color:#7a7a86';
-    h += `<option class="${cls}" style="${st}" value="${i}"${sel === i ? ' selected' : ''}>${steps && cls === 'in' ? '● ' : ''}${NAMES[(slotTonic(slot) + i) % 12]}${i >= 12 ? "'" : ''}${i % 12 === 0 ? ' (tonique)' : ''}</option>`;
+    const st = cls === 'in' ? 'color:var(--yang);font-weight:700' : 'color:var(--dim)';
+    h += `<option class="${cls}" style="${st}" value="${i}"${sel === i ? ' selected' : ''}>${steps && cls === 'in' ? '● ' : ''}${NAMES[(slotTonic(slot) + i) % 12]}${i >= 12 ? "'" : ''}${i % 12 === 0 ? t('m.tonicMark') : ''}</option>`;
   }
   return h;
 };
@@ -40,37 +40,37 @@ function openMenu(slot, x, y) {
   menu.innerHTML = `
     <div class="ctitle">${slot.label} : ${hexLabel(hexOf(slot))}</div>
     <div class="cform">
-      <span>Hexagramme</span><select id="mHex">${hexOptions}</select>
-      <span>Gamme</span><select id="mMode">${scaleOptions()}</select>
-      <span>Canal MIDI</span><select id="mChan">${chanOptions}</select>
-      <span>Tonique</span><select id="mTonic">${tonicOptions}</select>
-      <span>Octave</span><select id="mOct">${octOptions}</select>
-      <span>Rotation</span>
-      <div class="crow"><label><input type="checkbox" id="mRot"> active</label>
-        <button id="mDir" title="Sens de rotation">↻</button>
-        <select id="mSpd" title="Vitesse de rotation">${SPEEDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div>
-      <span>Côtés</span>
-      <div class="crow"><label><input type="checkbox" id="mSev"> 7e côté (heptagone)</label></div>
-      <span>Amorce</span>
-      <div class="crow"><label><input type="checkbox" id="mLoop"> tous les</label>
-        <input type="number" id="mLoopN" min="2" max="128" style="width:56px"> pas</div>
-      <span>Tourner</span>
-      <div class="crow"><button data-r="-1" title="Tourner de 60° dans le sens antihoraire">↺ 60°</button>
-        <button data-r="1" title="Tourner de 60° dans le sens horaire">↻ 60°</button></div>
+      <span>${t('m.hex')}</span><select id="mHex">${hexOptions()}</select>
+      <span>${t('m.scale')}</span><select id="mMode">${scaleOptions()}</select>
+      <span>${t('m.chan')}</span><select id="mChan">${chanOptions}</select>
+      <span>${t('m.tonic')}</span><select id="mTonic">${tonicOptions(true)}</select>
+      <span>${t('m.oct')}</span><select id="mOct">${octOptions()}</select>
+      <span>${t('m.rot')}</span>
+      <div class="crow"><label><input type="checkbox" id="mRot"> ${t('m.rot.active')}</label>
+        <button id="mDir" title="${t('dir.title')}">↻</button>
+        <select id="mSpd" title="${t('spd.title')}">${SPEEDS.map(([v, tt]) => `<option value="${v}">${tt}</option>`).join('')}</select></div>
+      <span>${t('m.sides')}</span>
+      <div class="crow"><label><input type="checkbox" id="mSev"> ${t('m.seven')}</label></div>
+      <span>${t('m.loop')}</span>
+      <div class="crow"><label><input type="checkbox" id="mLoop"> ${t('m.loop.every')}</label>
+        <input type="number" id="mLoopN" min="2" max="128" style="width:56px"> ${t('steps')}</div>
+      <span>${t('m.turn')}</span>
+      <div class="crow"><button data-r="-1" title="${t('m.ccw.title')}">↺ 60°</button>
+        <button data-r="1" title="${t('m.cw.title')}">↻ 60°</button></div>
     </div>
     <div class="csep"></div>
-    <label class="crow"><input type="checkbox" id="cOn"${slot.customOn ? ' checked' : ''}> Notes personnalisées</label>
-    <div class="hint">Gamme ${SCALES[slot.mode].label}, tonique ${NAMES[slotTonic(slot)]}</div>
-    <div class="cgrid"><b>trait</b><b>plein</b><b>brisé</b>${Array.from({ length: slot.n }, (_, k) => k).map(k =>
+    <label class="crow"><input type="checkbox" id="cOn"${slot.customOn ? ' checked' : ''}> ${t('m.custom')}</label>
+    <div class="hint">${t('m.hint', scaleLabel(slot.mode), NAMES[slotTonic(slot)])}</div>
+    <div class="cgrid"><b>${t('m.line')}</b><b>${t('m.solid')}</b><b>${t('m.broken')}</b>${Array.from({ length: slot.n }, (_, k) => k).map(k =>
       `<span>${k + 1}</span><select data-k="${k}" data-w="p">${noteOpts(slot, true, slot.custom[k].p)}</select>` +
       `<select data-k="${k}" data-w="b">${noteOpts(slot, true, slot.custom[k].b)}</select>`).join('')}</div>
-    <div class="crow"><button id="cFill" title="Copie les notes de la gamme actuelle">Reprendre la gamme</button>
-      <button id="cShuffle" title="Change au hasard l'ordre des notes entre les traits, la note en trop de la gamme comprise">Mélanger l'ordre</button></div>
+    <div class="crow"><button id="cFill" title="${t('m.fill.title')}">${t('m.fill')}</button>
+      <button id="cShuffle" title="${t('m.shuffle.title')}">${t('m.shuffle')}</button></div>
     <div class="csep"></div>
-    <div class="crow"><button id="mReset" title="Remettre cet hexagramme à sa forme de départ">Réinit.</button>
-      <button id="mAct" title="Griser l'hexagone : il ne joue ni ne reçoit">${slot.active ? 'Désactiver' : 'Activer'}</button>
-      <button id="mDel" title="Supprimer cet hexagone">Supprimer</button>
-      <button id="cClose">Fermer</button></div>`;
+    <div class="crow"><button id="mReset" title="${t('reset.title')}">${t('reset')}</button>
+      <button id="mAct" title="${t('m.deact.title')}">${slot.active ? t('m.deactivate') : t('m.activate')}</button>
+      <button id="mDel" title="${t('del.title')}">${t('m.delete')}</button>
+      <button id="cClose">${t('m.close')}</button></div>`;
   const q = s => menu.querySelector(s);
 
   // réglages (mêmes fonctions que le panneau)
@@ -82,7 +82,7 @@ function openMenu(slot, x, y) {
   q('#mTonic').addEventListener('change', e => { setTonic(slot, e.target.value); reopen(); });
   q('#mOct').value = slot.octave;
   q('#mOct').addEventListener('change', e => setOctave(slot, +e.target.value));
-  q('#mChan').value = slot.channel;
+  q('#mChan').value = slot.channel; q('#mChan').disabled = opt.chanAll !== null;
   q('#mChan').addEventListener('change', e => setChannel(slot, +e.target.value));
   q('#mRot').checked = slot.rotOn;
   q('#mRot').addEventListener('change', e => setRotOn(slot, e.target.checked));
@@ -107,7 +107,7 @@ function openMenu(slot, x, y) {
   const on = q('#cOn');
   on.addEventListener('change', () => { slot.customOn = on.checked; drawSlot(slot); });
   // le sélecteur fermé prend la couleur de la note choisie (ambre = dans la gamme)
-  const tint = sel => { const o = sel.selectedOptions[0]; sel.style.color = o && o.classList.contains('in') ? '#ffb000' : o && o.classList.contains('out') ? '#9a9aa6' : ''; };
+  const tint = sel => { const o = sel.selectedOptions[0]; sel.style.color = o && o.classList.contains('in') ? 'var(--yang)' : o && o.classList.contains('out') ? 'var(--dim)' : ''; };
   menu.querySelectorAll('select[data-k]').forEach(tint);
   for (const sel of menu.querySelectorAll('select[data-k]')) sel.addEventListener('change', () => {
     tint(sel);
@@ -135,10 +135,10 @@ function placeMenu(x, y) {
 function openSelMenu(x, y) {
   const sel = selected();
   menu.innerHTML = `
-    <div class="ctitle">${sel.length} hexagrammes sélectionnés</div>
-    <div class="crow"><button id="sDel">Supprimer</button>
-      <button id="sOff">Désactiver</button><button id="sOn">Activer</button></div>
-    <div class="crow"><button id="sClear">Désélectionner</button><button id="cClose">Fermer</button></div>`;
+    <div class="ctitle">${t('sel.title', sel.length)}</div>
+    <div class="crow"><button id="sDel">${t('m.delete')}</button>
+      <button id="sOff">${t('m.deactivate')}</button><button id="sOn">${t('m.activate')}</button></div>
+    <div class="crow"><button id="sClear">${t('sel.clear')}</button><button id="cClose">${t('m.close')}</button></div>`;
   const q = s => menu.querySelector(s);
   q('#sDel').addEventListener('click', deleteSelected);
   q('#sOff').addEventListener('click', () => { sel.forEach(s => setActive(s, false)); closeMenu(); });
@@ -150,24 +150,28 @@ function openSelMenu(x, y) {
 // menu du clic droit sur la grille : nouvel hexagramme, taille de la grille
 function openBoardMenu(x, y, gx, gy) {
   const free = freeCellNear(gx, gy);
-  const canShrink = N > N_MIN && !slots.some(s => s.gx >= N - 1 || s.gy >= N - 1);
   menu.innerHTML = `
-    <div class="ctitle">Grille ${N}x${N}</div>
+    <div class="ctitle">${t('board.title', NX, NY)}</div>
     <div class="crow"><button id="bAdd"${free && slots.length < LABELS.length ? '' : ' disabled'}
-      title="Ajoute un hexagramme tiré au hasard sur le point libre le plus proche">Nouvel hexagramme ici</button></div>
-    <div class="crow"><button id="bGrow"${N < N_MAX ? '' : ' disabled'}>Agrandir (${N + 1}x${N + 1})</button>
-      <button id="bShrink"${canShrink ? '' : ' disabled'}
-        title="${canShrink ? '' : 'Un hexagone occupe la dernière ligne ou colonne (ou taille minimale)'}">Réduire (${N - 1}x${N - 1})</button></div>
-    ${selected().length ? `<div class="crow"><button id="bSel" title="Supprime les hexagrammes sélectionnés">Supprimer la sélection (${selected().length})</button></div>` : ''}
-    <div class="crow"><button id="cClose">Fermer</button></div>`;
+      title="${t('board.add.title')}">${t('board.add')}</button></div>
+    <div class="cgrid2"><span>${t('board.size')}</span>
+      <input type="number" id="bCols" min="${N_MIN}" max="${N_MAX}" value="${NX}" title="${t('board.cols')}"> x
+      <input type="number" id="bRows" min="${N_MIN}" max="${N_MAX}" value="${NY}" title="${t('board.rows')}">
+      <button id="bApply">${t('board.apply')}</button></div>
+    <div class="hint" id="bMsg">${t('board.hint', N_MIN, N_MAX)}</div>
+    ${selected().length ? `<div class="crow"><button id="bSel" title="${t('board.delsel.title')}">${t('board.delsel', selected().length)}</button></div>` : ''}
+    <div class="crow"><button id="cClose">${t('m.close')}</button></div>`;
   const q = s => menu.querySelector(s);
   if (q('#bSel')) q('#bSel').addEventListener('click', deleteSelected);
   q('#bAdd').addEventListener('click', () => {
     if (free) addSlot({ gx: free[0], gy: free[1], lines: randomLines() });
     closeMenu();
   });
-  q('#bGrow').addEventListener('click', () => { setGridSize(N + 1); openBoardMenu(x, y, gx, gy); });
-  q('#bShrink').addEventListener('click', () => { setGridSize(N - 1); openBoardMenu(x, y, gx, gy); });
+  q('#bApply').addEventListener('click', () => {
+    const c = Math.round(+q('#bCols').value), r = Math.round(+q('#bRows').value);
+    if (setGridSize(c, r)) closeMenu();
+    else q('#bMsg').textContent = t('board.nofit', N_MIN, N_MAX);
+  });
   q('#cClose').addEventListener('click', closeMenu);
   placeMenu(x, y);
 }
@@ -175,7 +179,7 @@ svg.addEventListener('contextmenu', e => {
   e.preventDefault();
   const p = svgPoint(e);
   openBoardMenu(e.clientX, e.clientY,
-    Math.max(0, Math.min(N - 1, Math.round((p.x - M) / S))), Math.max(0, Math.min(N - 1, Math.round((p.y - M) / S))));
+    Math.max(0, Math.min(NX - 1, Math.round((p.x - M) / S))), Math.max(0, Math.min(NY - 1, Math.round((p.y - M) / S))));
 });
 document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });

@@ -1,4 +1,4 @@
-//: Panneau de commandes : réglages, bloc par hexagone, tirage, placement
+//: Commandes : réglages, bloc par hexagone (menu Hexagrammes), grille, tirage, placement
 // ---------- Commandes ----------
 const $ = id => document.getElementById(id);
 const $play = $('play'), $vol = $('vol'), $status = $('status');
@@ -22,34 +22,48 @@ $vol.addEventListener('input', e => { if (master) master.gain.value = +e.target.
 $('soft').addEventListener('input', e => { opt.softRange = Math.max(1, +e.target.value || 1); });
 $('mutate').addEventListener('change', e => { opt.mutate = e.target.checked; });
 
-// tonique et gamme par hexagone
-const scaleOptions = () => Object.entries(SCALES)
-  .map(([key, v]) => `<option value="${key}">${v.label}</option>`).join('');
-$('tonic').innerHTML = NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
-$('octave').innerHTML = [-3, -2, -1, 0, 1, 2, 3].map(o => `<option value="${o}">${o > 0 ? '+' + o : o}</option>`).join('');
-$('octave').value = 0;
+// listes déroulantes dépendant de la langue (réappelée par applyLang)
+const scaleOptions = () => Object.keys(SCALES).map(key => `<option value="${key}">${scaleLabel(key)}</option>`).join('');
+const octOptions = () => [-3, -2, -1, 0, 1, 2, 3].map(o => `<option value="${o}">${o > 0 ? '+' + o : o}</option>`).join('');
+const tonicOptions = withGlobal => (withGlobal ? `<option value="">${t('tonic.global')}</option>` : '') +
+  NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+const hexOptions = () => Array.from({ length: 64 }, (_, i) => `<option value="${i + 1}">${hexLabel(i + 1)}</option>`).join('');
+function fillTonalityLists() {
+  $('tonic').innerHTML = tonicOptions(false); $('tonic').value = opt.tonic;
+  $('octave').innerHTML = octOptions(); $('octave').value = opt.octave;
+  $('scaleBase').innerHTML = scaleOptions(); $('scaleBase').value = opt.scale;
+}
+fillTonalityLists();
 $('octave').addEventListener('change', e => { opt.octave = +e.target.value; });
 $('tonic').addEventListener('change', e => {
   opt.tonic = +e.target.value;
   slots.forEach(drawSlot);
 });
-$('modeAll').insertAdjacentHTML('beforeend', scaleOptions());
+// gamme de base : s'applique à tous les hexagrammes et sert aux nouveaux
+$('scaleBase').addEventListener('change', e => {
+  opt.scale = e.target.value;
+  for (const s of slots) setMode(s, opt.scale);
+});
+$('chanAll').innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i}">${i + 1}</option>`).join('');
+$('chanMode').addEventListener('change', e => setChanAll(e.target.value === 'same' ? +$('chanAll').value || 0 : null));
+$('chanAll').addEventListener('change', e => setChanAll(+e.target.value));
+$('uniform').addEventListener('change', e => { opt.uniform = e.target.checked; });
 const modesBox = $('modes');
 
-// repli de toute la zone d'édition des hexagrammes ; l'état est retenu d'une visite à l'autre
-const hexEdit = $('hexEdit');
-try { if (localStorage.getItem('hexacorde.hexEditOpen') === '0') hexEdit.open = false; } catch (_) { /* stockage inaccessible */ }
-hexEdit.addEventListener('toggle', () => {
-  try { localStorage.setItem('hexacorde.hexEditOpen', hexEdit.open ? '1' : '0'); } catch (_) { /* ignoré */ }
-});
-const hexOptions = Array.from({ length: 64 }, (_, i) => `<option value="${i + 1}">${hexLabel(i + 1)}</option>`).join('');
 const chanOptions = Array.from({ length: 16 }, (_, i) => `<option value="${i}">${i + 1}</option>`).join('');
-const tonicOptions = '<option value="">tonique globale</option>' + NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
-const octOptions = [-3, -2, -1, 0, 1, 2, 3].map(o => `<option value="${o}">${o > 0 ? '+' + o : o}</option>`).join('');
 const SPEEDS = [[0.125, '÷8', '/8'], [0.25, '÷4', '/4'], [1 / 3, '÷3', '/3'], [0.5, '÷2', '/2'], [1, '×1', 'x1'], [2, '×2', 'x2'], [3, '×3', 'x3']];
-// Réglages d'un hexagone, communs au panneau et au menu du clic droit : chaque fonction met à jour
+// Réglages d'un hexagone, communs au menu Hexagrammes et au menu du clic droit : chaque fonction met à jour
 // l'état ET les contrôles du panneau, pour que les deux interfaces restent synchronisées.
 function setMode(slot, mode) { slot.mode = mode; slot.modeSel.value = mode; drawSlot(slot); }
+// canal MIDI commun à tous (null = individuels) : les canaux de chaque hexagone sont conservés mais grisés
+function setChanAll(ch) {
+  midiPanic();
+  opt.chanAll = ch;
+  $('chanMode').value = ch === null ? 'indiv' : 'same';
+  $('chanAll').hidden = ch === null;
+  if (ch !== null) $('chanAll').value = ch;
+  for (const s of slots) s.chanSel.disabled = ch !== null;
+}
 function setChannel(slot, ch) { midiPanic(); slot.channel = ch; slot.chanSel.value = ch; }
 function setRotOn(slot, on) { slot.rotOn = on; slot.rotChk.checked = on; }
 function setRotDir(slot, dir) { slot.rotDir = dir; slot.dirBtn.textContent = dir > 0 ? '↻' : '↺'; }
@@ -90,33 +104,33 @@ function setLoop(slot, on, n) {
   slot.loopChk.checked = on; slot.loopNum.value = slot.loopN;
 }
 
-// bloc de réglages d'un hexagone dans le panneau
+// bloc de réglages d'un hexagone dans le menu Hexagrammes
 function buildSlotPanel(slot) {
   const box = slot.box = document.createElement('div');
   box.className = 'slotctl';
   box.innerHTML = `
     <div class="row"><span>${slot.label}</span>
-      <select class="hex" title="Hexagramme">${hexOptions}</select>
-      <label title="Actif : décocher pour griser l'hexagone"><input class="act" type="checkbox"></label>
-      <button class="del" title="Supprimer cet hexagone">✕</button></div>
+      <select class="hex" title="${t('hex.title')}">${hexOptions()}</select>
+      <label title="${t('act.title')}"><input class="act" type="checkbox"></label>
+      <button class="del" title="${t('del.title')}">✕</button></div>
     <div class="row"><span></span>
-      <select class="scale" title="Gamme">${scaleOptions()}</select>
-      <select class="chan" title="Canal MIDI">${chanOptions}</select></div>
+      <select class="scale" title="${t('scale.title')}">${scaleOptions()}</select>
+      <select class="chan" title="${t('chan.title')}">${chanOptions}</select></div>
     <div class="row rot">
-      <select class="stonic" title="Tonique de cet hexagone">${tonicOptions}</select>
-      <select class="soct" title="Octave de cet hexagone (en plus de l'octave globale)">${octOptions}</select>
+      <select class="stonic" title="${t('stonic.title')}">${tonicOptions(true)}</select>
+      <select class="soct" title="${t('soct.title')}">${octOptions()}</select>
     </div>
     <div class="row rot">
-      <label title="Faire tourner cet hexagone"><input class="rotOn" type="checkbox"> rot.</label>
-      <button class="dir" title="Sens de rotation">↻</button>
-      <select class="spd" title="Vitesse de rotation">${SPEEDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select>
-      <button class="reset" title="Remettre cet hexagramme à sa forme de départ">Réinit.</button>
+      <label title="${t('rot.title')}"><input class="rotOn" type="checkbox"> ${t('rot')}</label>
+      <button class="dir" title="${t('dir.title')}">↻</button>
+      <select class="spd" title="${t('spd.title')}">${SPEEDS.map(([v, tt]) => `<option value="${v}">${tt}</option>`).join('')}</select>
+      <button class="reset" title="${t('reset.title')}">${t('reset')}</button>
     </div>
     <div class="row rot">
-      <label title="Amorcer une note de cet hexagone tous les N pas"><input class="loopOn" type="checkbox"> amorce tous les
-        <input class="loopN" type="number" min="2" max="128"> pas</label></div>
+      <label title="${t('loop.title')}"><input class="loopOn" type="checkbox"> ${t('loop.every')}
+        <input class="loopN" type="number" min="2" max="128"> ${t('steps')}</label></div>
     <div class="row rot">
-      <label title="Ajoute un 7e côté : l'hexagone devient un heptagone"><input class="sev" type="checkbox"> 7e côté</label>
+      <label title="${t('seven.title')}"><input class="sev" type="checkbox"> ${t('seven')}</label>
     </div>`;
   const q = s => box.querySelector(s);
   slot.hexSel = q('.hex');
@@ -137,7 +151,7 @@ function buildSlotPanel(slot) {
   slot.octSel.addEventListener('change', () => setOctave(slot, +slot.octSel.value));
 
   slot.chanSel = q('.chan');
-  slot.chanSel.value = slot.channel;
+  slot.chanSel.value = slot.channel; slot.chanSel.disabled = opt.chanAll !== null;
   slot.chanSel.addEventListener('change', e => setChannel(slot, +e.target.value));
 
   slot.rotChk = q('.rotOn'); slot.rotChk.checked = slot.rotOn;
@@ -161,7 +175,7 @@ function buildSlotPanel(slot) {
 
 // ajoute un hexagone (données, dessin sur la grille, bloc du panneau) ; c : voir makeSlot
 function addSlot(c) {
-  const slot = makeSlot(c);
+  const slot = makeSlot({ mode: opt.scale, ...c });
   slots.push(slot);
   buildSlotView(slot);
   buildSlotPanel(slot);
@@ -179,7 +193,7 @@ function removeSlot(slot, quiet) {
 // premier point libre le plus proche de (gx, gy), ou null si la grille est pleine
 function freeCellNear(gx, gy) {
   let best = null, bd = Infinity;
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
     if (slots.some(s => s.gx === x && s.gy === y)) continue;
     const d = Math.hypot(x - gx, y - gy);
     if (d < bd) { bd = d; best = [x, y]; }
@@ -187,10 +201,11 @@ function freeCellNear(gx, gy) {
   return best;
 }
 const randomLines = () => Array.from({ length: 6 }, () => (Math.random() < 0.5 ? 1 : 0));
-// change la taille de la grille (de N_MIN à N_MAX) ; refuse si un hexagone sortirait du plateau
-function setGridSize(n) {
-  if (n < N_MIN || n > N_MAX || slots.some(s => s.gx >= n || s.gy >= n)) return false;
-  N = n;
+// change la taille de la grille (cols x rows, de N_MIN à N_MAX) ; refuse si un hexagone sortirait du plateau
+function setGridSize(cols, rows) {
+  if (cols < N_MIN || cols > N_MAX || rows < N_MIN || rows > N_MAX) return false;
+  if (slots.some(s => s.gx >= cols || s.gy >= rows)) return false;
+  NX = cols; NY = rows;
   drawGrid();
   slots.forEach(drawSlot);
   return true;
@@ -203,12 +218,6 @@ function setGridSize(n) {
 $('rotAll').addEventListener('change', e => {
   for (const s of slots) setRotOn(s, e.target.checked);
 });
-$('modeAll').addEventListener('change', e => {
-  if (!e.target.value) return;
-  for (const s of slots) setMode(s, e.target.value);
-  e.target.value = '';
-});
-
 $('draw').addEventListener('click', () => {
   for (const s of slots) {
     s.lines = s.lines.map(() => (Math.random() < 0.5 ? 1 : 0));

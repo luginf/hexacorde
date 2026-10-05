@@ -5,12 +5,12 @@ const recSay = m => { $recMsg.textContent = m; };
 
 // MIDI : la case lance l'enregistrement, le bouton l'arrête et télécharge le fichier
 $rec.addEventListener('change', () => {
-  if ($rec.checked) { beginRecording(); recSay('Enregistrement MIDI en cours.'); }
-  else if (rec) { rec.live = false; recSay('Enregistrement MIDI arrêté : il reste à sauvegarder.'); }
+  if ($rec.checked) { beginRecording(); recSay(t('recmsg.midi.on')); }
+  else if (rec) { rec.live = false; recSay(t('recmsg.midi.off')); }
 });
 $recSave.addEventListener('click', () => {
-  if (finishRecording()) { $rec.checked = false; recSay('Fichier MIDI téléchargé.'); }
-  else recSay('Rien à sauvegarder : aucune note enregistrée.');
+  if (finishRecording()) { $rec.checked = false; recSay(t('recmsg.midi.saved')); }
+  else recSay(t('recmsg.midi.none'));
 });
 
 // audio : on branche un ScriptProcessor sur le volume général ; les échantillons (Int16, mono) sont
@@ -38,17 +38,17 @@ $arec.addEventListener('change', () => {
   if ($arec.checked) {
     audioTap(true);
     arec = { chunks: [], n: 0, live: true, started: running };
-    recSay('Enregistrement audio en cours' + (running ? '.' : ' (il commence au premier Jouer).'));
+    recSay(t(running ? 'recmsg.audio.on' : 'recmsg.audio.wait'));
   } else if (arec) {
     arec.live = false; audioTap(false);
-    recSay('Enregistrement audio arrêté : il reste à sauvegarder.');
+    recSay(t('recmsg.audio.off'));
   }
 });
 $arecSave.addEventListener('click', () => {
-  if (!arec || !arec.n) { recSay('Rien à sauvegarder : aucun son enregistré.'); return; }
+  if (!arec || !arec.n) { recSay(t('recmsg.audio.none')); return; }
   const fmt = $('afmt').value, r = arec;
   arec = null; $arec.checked = false; audioTap(false);
   const bytes = fmt === 'wav' ? encodeWav(r.chunks, r.n, ac.sampleRate) : encodeFlac(r.chunks, r.n, ac.sampleRate);
   download(bytes, `${fileBase()}-${fileStamp()}.${fmt}`, fmt === 'wav' ? 'audio/wav' : 'audio/flac');
-  recSay(`Fichier .${fmt} téléchargé (${(r.n / ac.sampleRate).toFixed(1)} s).`);
+  recSay(t('recmsg.audio.saved', fmt, (r.n / ac.sampleRate).toFixed(1)));
 });

@@ -12,13 +12,14 @@ function start() {
   ensureAudio();
   if (running) return;
   running = true; nextAt = performance.now();
-  $play.textContent = 'Pause'; $play.classList.add('on');
+  $play.textContent = t('pause'); $play.classList.add('on');
+  sendPrograms();                            // les instruments sont renvoyés à chaque départ
   if (arec) arec.started = true;            // l'audio commence au premier Jouer
   schedule();
 }
 function stop() {
   running = false; clearTimeout(timer);
-  $play.textContent = 'Jouer'; $play.classList.remove('on');
+  $play.textContent = t('play'); $play.classList.remove('on');
   midiPanic();
 }
 function silence() {

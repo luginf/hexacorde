@@ -34,8 +34,8 @@ function onUp(e) {
   drag = null;
   if (moved && e.type === 'pointerup') {
     const p = svgPoint(e);
-    const gx = Math.max(0, Math.min(N - 1, Math.round((p.x - M) / S)));
-    const gy = Math.max(0, Math.min(N - 1, Math.round((p.y - M) / S)));
+    const gx = Math.max(0, Math.min(NX - 1, Math.round((p.x - M) / S)));
+    const gy = Math.max(0, Math.min(NY - 1, Math.round((p.y - M) / S)));
     if (!slots.some(o => o !== slot && o.gx === gx && o.gy === gy)) { slot.gx = gx; slot.gy = gy; }
     drawSlot(slot);
   } else if (!moved) {

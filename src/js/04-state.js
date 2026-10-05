@@ -5,6 +5,8 @@ const slots = [];
 let slotSeq = 0;
 // crée les données d'un hexagone (c : gx, gy, lines, et en option label, initial, mode, channel, active,
 // custom, customOn, rot, rotOn, rotDir, rotSpeed). La lettre est la première libre.
+// canal MIDI effectif : le canal unique s'il est choisi, sinon celui de l'hexagone (qui reste mémorisé)
+const chanOf = slot => (opt.chanAll === null ? slot.channel : opt.chanAll);
 function makeSlot(c) {
   const free = LABELS.split('').find(l => !slots.some(s => s.label === l));
   const label = c.label && !slots.some(s => s.label === c.label) ? c.label : free;
@@ -32,4 +34,7 @@ const MAX_PULSES = 300;
 
 const opt = {
   softRange: 2.5, mutate: false, tonic: 0, octave: 0,
+  scale: 'chromatique',                       // gamme de base : celle des nouveaux hexagones
+  chanAll: null,                              // canal MIDI unique pour tous (null = canaux individuels)
+  uniform: false,                             // octave uniforme sur toute la grille
 };
