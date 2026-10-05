@@ -160,7 +160,7 @@ Détails du fichier MIDI :
 
 ## Cœur C++ et module VCV Rack
 
-En plus de la page web, le séquenceur existe sous forme d'un **cœur C++17** sans dépendance (`core/`, portage fidèle du moteur JavaScript, vérifié note par note contre la page web par `make core-test`) et, construit dessus, d'un **module pour VCV Rack 2** (`vcv/`) : un séquenceur polyphonique pitch / gate / vélocité dont on joue le plateau comme sur la page web, avec import et export des mêmes fichiers de setup `.json`. Voir `core/README.md` et `vcv/README.md`. Un plugin JUCE ou DPF pourrait utiliser le même cœur.
+En plus de la page web, le séquenceur existe sous forme d'un **cœur C++17** sans dépendance (`core/`, portage fidèle du moteur JavaScript, vérifié note par note contre la page web par `make core-test`) et, construit dessus, d'un **module pour VCV Rack 2** (`vcv/`) : un séquenceur polyphonique pitch / gate / vélocité dont on joue le plateau comme sur la page web, avec import et export des mêmes fichiers de setup `.json`. et d'un **plugin JUCE** (`juce/`, VST3 et autonome) : le séquenceur suit le transport de l'hôte (ou une horloge interne), envoie des notes MIDI (un canal par hexagone) à l'hôte et à un port MIDI choisi, et a un petit synthé interne. Voir `core/README.md`, `vcv/README.md` et `juce/README.md`.
 
 ## À venir
 

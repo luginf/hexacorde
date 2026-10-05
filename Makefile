@@ -1,7 +1,8 @@
-# Hexacorde : trois parties, chacune dans son dossier.
+# Hexacorde : quatre parties, chacune dans son dossier.
 #   docs/  l'application web (sources dans docs/src/, page générée docs/index.html, publiée par GitHub Pages)
 #   core/  le cœur C++ sans dépendance (portage du moteur JS, vérifié contre lui)
 #   vcv/   le module VCV Rack construit sur core/
+#   juce/  le plugin JUCE (VST3, standalone) construit sur core/
 #
 #   make              construit docs/index.html (page unique, sans dépendance) à partir de docs/src/
 #   make check        vérifie la syntaxe du JS assemblé (node)
@@ -10,6 +11,8 @@
 #   make core-ref     régénère core/test/ref.txt depuis docs/index.html (demande google-chrome)
 #   make vcv          compile le module VCV Rack (demande le Rack SDK, voir vcv/README.md)
 #   make vcv-release  exporte le module comme dépôt autonome (pour la VCV Library)
+#   make juce         compile le plugin JUCE (télécharge JUCE ; cmake requis, voir juce/README.md)
+#   make juce-test    teste le plugin sans interface ni carte son (horloge, notes MIDI, état)
 #   make clean        supprime les fichiers intermédiaires
 
 WEB := docs
@@ -37,7 +40,7 @@ serve: $(WEB)/index.html
 	cd $(WEB) && python3 -m http.server 8000
 
 clean:
-	rm -rf $(WEB)/build core/build
+	rm -rf $(WEB)/build core/build juce/build
 
 # ---- cœur C++ : tables générées depuis les sources JS, puis test de fidélité contre le JS ----
 core/tables.hpp: core/gen_tables.js $(WEB)/src/js/01-constants.js $(WEB)/src/js/02-hexagrams.js $(WEB)/src/js/00b-lang-en.js $(WEB)/src/js/00c-lang-fr.js
@@ -55,8 +58,21 @@ core-ref: $(WEB)/index.html
 vcv: core/tables.hpp
 	$(MAKE) -C vcv
 
+# ---- plugin JUCE (télécharge JUCE ; cmake requis) : make juce [JUCE_DIR=/chemin/vers/JUCE] ; make juce-test = horloge puis processBlock sans interface ----
+juce: core/tables.hpp
+	cmake -S juce -B juce/build -DCMAKE_BUILD_TYPE=Release $(if $(JUCE_DIR),-DJUCE_DIR=$(JUCE_DIR))
+	cmake --build juce/build -j4
+
+juce-test: core/tables.hpp
+	@mkdir -p juce/build
+	g++ -std=c++17 -Wall -Wextra -o juce/build/test_clock juce/test/test_clock.cpp
+	juce/build/test_clock
+	cmake -S juce -B juce/build -DCMAKE_BUILD_TYPE=Release $(if $(JUCE_DIR),-DJUCE_DIR=$(JUCE_DIR))
+	cmake --build juce/build --target HexacordeTest -j4
+	juce/build/HexacordeTest_artefacts/Release/HexacordeTest
+
 # dépôt autonome du module pour la VCV Library (voir vcv/release.sh) : make vcv-release [OUT=dossier]
 vcv-release: core/tables.hpp
 	vcv/release.sh $(OUT)
 
-.PHONY: vcv-release all web check serve clean core-test core-ref vcv
+.PHONY: juce juce-test vcv-release all web check serve clean core-test core-ref vcv

@@ -2,7 +2,7 @@
 
 Licence BSD 3 clauses (voir `../LICENSE`), y compris quand le cœur est copié dans le module VCV Rack (lui-même en GPLv3).
 
-Le moteur du séquenceur en C++17, **sans dépendance** (en-têtes seulement), portage fidèle de `docs/src/js/01` à `06` et `15` de l'application web. Il ne fait ni son, ni MIDI, ni interface : à chaque pas, `Engine::step()` renvoie les notes jouées. Les coques (module VCV Rack dans `../vcv`, plus tard un plugin JUCE ou DPF) s'en servent.
+Le moteur du séquenceur en C++17, **sans dépendance** (en-têtes seulement), portage fidèle de `docs/src/js/01` à `06` et `15` de l'application web. Il ne fait ni son, ni MIDI, ni interface : à chaque pas, `Engine::step()` renvoie les notes jouées. Les coques (module VCV Rack dans `../vcv`, plugin JUCE dans `../juce`) s'en servent.
 
 | Fichier | Rôle |
 |---|---|

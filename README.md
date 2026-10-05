@@ -158,7 +158,7 @@ MIDI file details:
 
 ## C++ core and VCV Rack module
 
-Besides the web page, the sequencer exists as a **C++17 core** without dependencies (`core/`, a faithful port of the JavaScript engine, checked note by note against the web page by `make core-test`) and, built on it, a **module for VCV Rack 2** (`vcv/`): a polyphonic pitch / gate / velocity sequencer whose board you play like the web page, with import and export of the same setup `.json` files. See `core/README.md` and `vcv/README.md`. A JUCE or DPF plugin could use the same core.
+Besides the web page, the sequencer exists as a **C++17 core** without dependencies (`core/`, a faithful port of the JavaScript engine, checked note by note against the web page by `make core-test`) and, built on it, a **module for VCV Rack 2** (`vcv/`): a polyphonic pitch / gate / velocity sequencer whose board you play like the web page, with import and export of the same setup `.json` files. and a **JUCE plugin** (`juce/`, VST3 and standalone): the sequencer follows the host transport (or an internal clock), sends MIDI notes (one channel per hexagon) to the host and to a chosen MIDI port, and has a small built-in synth. See `core/README.md`, `vcv/README.md` and `juce/README.md`.
 
 ## Roadmap
 
