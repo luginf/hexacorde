@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- Fichier généré par make à partir de src/ : ne pas éditer à la main (voir CLAUDE.md). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hexacorde</title>
+<meta name="description" content="Hexacorde: an oracular step sequencer. I Ching hexagrams on a grid send notes to each other. Plain HTML and JavaScript.">
+<meta property="og:title" content="Hexacorde">
+<meta property="og:description" content="Oracular step sequencer: I Ching hexagrams send notes to each other on a grid.">
+<meta property="og:type" content="website">
+<style>
+/*@@CSS@@*/
+</style>
+</head>
+<body>
+<header id="bar">
+  <div class="bar1">
+    <h1>HEXACORDE</h1>
+    <button id="play" data-i="play">Play</button>
+    <button id="silence" data-i="silence" data-i-title="silence.title">Silence</button>
+    <label class="inl"><span data-i="step">Step</span> <input id="tempo" type="range" min="80" max="700" step="10" value="240"></label>
+    <span id="tempoVal">240 ms</span>
+    <label class="inl" data-i-title="bpm.title"><input id="bpm" type="number" min="43" max="375" step="1" value="125"> BPM</label>
+    <label class="inl"><span data-i="volume">Volume</span> <input id="vol" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+    <span id="status"></span>
+  </div>
+  <nav class="bar2">
+    <div class="dd"><button class="ddb" data-i="menu.tonality">Tonality</button><div class="ddp" hidden>
+      <div class="row"><label><span data-i="tonic">Tonic</span>
+        <select id="tonic"></select></label>
+        <label data-i-title="octave.title"><span data-i="octave">Octave</span>
+        <select id="octave"></select></label></div>
+      <div class="row"><label data-i-title="scaleBase.title"><span data-i="scaleBase">Scale</span>
+        <select id="scaleBase"></select></label></div>
+      <div class="hint" data-i="tonality.hint"></div>
+    </div></div>
+    <div class="dd"><button class="ddb" data-i="menu.hexagrams">Hexagrams</button><div class="ddp xwide" hidden>
+      <div id="modes"></div>
+    </div></div>
+    <div class="dd"><button class="ddb" data-i="menu.settings">Settings</button><div class="ddp" hidden>
+      <div class="row"><label><span data-i="set.range">Soft line range</span>
+        <input id="soft" type="number" min="1" max="9" step="0.5" value="2.5"></label></div>
+      <div class="row"><label><input id="mutate" type="checkbox"> <span data-i="set.mutate">Line mutation</span></label></div>
+      <div class="row"><label data-i-title="set.rotAll.title"><input id="rotAll" type="checkbox"> <span data-i="set.rotAll">↻ all</span></label></div>
+      <div class="row"><label data-i-title="set.uniform.title"><input id="uniform" type="checkbox"> <span data-i="set.uniform">Uniform octave</span></label></div>
+      <div class="row"><label><span data-i="set.theme">Theme</span> <select id="theme"></select></label></div>
+    </div></div>
+    <div class="dd"><button class="ddb" data-i="menu.sound">Sound</button><div class="ddp" hidden>
+      <div class="row"><label><input id="internal" type="checkbox" checked> <span data-i="snd.internal">Internal sound</span></label></div>
+      <div id="sound">
+    <div class="row"><label><span data-i="snd.for">Edit the sound of</span> <select id="soundCh"></select></label></div>
+    <div class="hint" data-i="snd.hint"></div>
+    <div class="row"><label><span data-i="snd.preset">Instrument</span> <select id="preset"></select></label></div>
+    <div class="row"><label><span data-i="snd.wave">Wave</span> <select id="wave"></select></label></div>
+    <div id="fmRow" hidden>
+      <div class="sl" data-i-title="snd.fmr.title"><span>FM</span><input id="fmr" type="range" min="0.5" max="12" step="0.5"><output id="oFmr"></output></div>
+      <div class="sl" data-i-title="snd.fmi.title"><span>Idx</span><input id="fmi" type="range" min="0" max="12" step="0.1"><output id="oFmi"></output></div>
+    </div>
+    <canvas id="envCv" width="272" height="110" data-i-title="snd.envTitle"></canvas>
+    <div class="sl"><span>A</span><input id="envA" type="range" min="1" max="500"><output id="oA"></output></div>
+    <div class="sl"><span>D</span><input id="envD" type="range" min="10" max="1000"><output id="oD"></output></div>
+    <div class="sl"><span>S</span><input id="envS" type="range" min="0" max="1" step="0.01"><output id="oS"></output></div>
+    <div class="sl"><span>R</span><input id="envR" type="range" min="10" max="1500"><output id="oR"></output></div>
+    <div class="csep"></div>
+    <div class="row"><label><span data-i="snd.filter">Filter</span> <select id="ftype"></select></label></div>
+    <canvas id="fltCv" width="272" height="80"></canvas>
+    <div class="sl"><span>Fc</span><input id="fcut" type="range" min="0" max="1" step="0.001"><output id="oFc"></output></div>
+    <div class="sl"><span>Q</span><input id="fq" type="range" min="0.1" max="20" step="0.1"><output id="oQ"></output></div>
+    <div class="sl" data-i-title="snd.envDepth.title"><span>Env</span><input id="fenv" type="range" min="0" max="1" step="0.01"><output id="oEnv"></output></div>
+    <div class="row"><button id="soundReset" data-i="snd.reset">Default sound</button>
+      <button id="soundInherit" hidden data-i="snd.inherit">Use the all-channels sound</button></div>
+      </div>
+    </div></div>
+    <div class="dd"><button class="ddb" data-i="menu.midi">MIDI</button><div class="ddp" hidden>
+      <div class="row">
+        <button id="midiEnable" data-i="midi.enable">Enable MIDI</button>
+        <select id="midiOut" disabled style="flex:1;min-width:0"><option value=""></option></select></div>
+      <div class="row"><span id="midiMsg" class="hint"></span></div>
+      <div class="row"><label data-i-title="midi.chan.title"><span data-i="midi.chan">Channels</span>
+        <select id="chanMode"><option value="indiv" data-i="midi.chan.indiv">Individual (per hexagon)</option><option value="same" data-i="midi.chan.same">Same for all</option></select></label>
+        <select id="chanAll" hidden></select></div>
+      <h3 data-i="midi.inst">Instruments (program change)</h3>
+      <div class="hint" data-i="midi.inst.hint"></div>
+      <div id="progs"></div>
+    </div></div>
+    <div class="dd"><button class="ddb" data-i="menu.file">File</button><div class="ddp wide" hidden><div class="cols2">
+      <section>
+        <h3 data-i="file.rec">Recording</h3>
+        <div class="row"><label style="flex:1"><span data-i="file.names">File name</span>
+          <input id="recName" type="text" value="hexacorde" style="flex:1;min-width:0"></label></div>
+        <div class="row"><label data-i-title="rec.midi.title"><input id="rec" type="checkbox"> <span data-i="rec.midi">Record MIDI</span></label>
+          <button id="recSave" disabled data-i="rec.save" data-i-title="rec.save.midi.title">Save the recording</button></div>
+        <div class="row"><label data-i-title="rec.audio.title"><input id="arec" type="checkbox"> <span data-i="rec.audio">Record audio</span></label>
+          <select id="afmt" data-i-title="afmt.title"><option value="flac">.flac</option><option value="wav">.wav</option></select>
+          <button id="arecSave" disabled data-i="rec.save" data-i-title="rec.save.audio.title">Save the recording</button></div>
+        <div id="recMsg" class="hint"></div>
+      </section>
+      <section>
+        <h3 data-i="file.setup">Setup</h3>
+        <div class="row"><input id="setupName" type="text" value="hexacorde" style="flex:1;min-width:0" data-i-title="setup.name.title">
+          <button id="setupSave" data-i="setup.save" data-i-title="setup.save.title">Save</button></div>
+        <div class="row"><select id="setupList" style="flex:1;min-width:0"></select>
+          <button id="setupLoad" data-i="setup.load">Load</button><button id="setupDel" data-i="setup.del">Delete</button></div>
+        <div class="row"><button id="setupFile" data-i="setup.file" data-i-title="setup.file.title">.json file</button>
+          <button id="setupOpen" data-i="setup.open" data-i-title="setup.open.title">Open...</button>
+          <input id="setupPick" type="file" accept=".json,.txt,application/json,text/plain" hidden></div>
+        <textarea id="setupText" rows="6" spellcheck="false" data-i-ph="setup.text.ph"></textarea>
+        <div class="row"><button id="setupCopy" data-i="setup.copy" data-i-title="setup.copy.title">Text / Copy</button>
+          <button id="setupApply" data-i="setup.apply" data-i-title="setup.apply.title">Apply</button></div>
+        <div id="setupMsg" class="hint"></div>
+      </section>
+    </div></div></div>
+    <div class="dd"><button class="ddb" data-i="menu.draw">Draw</button><div class="ddp" hidden>
+      <div class="row"><button id="draw" class="closes" data-i="draw.random" data-i-title="draw.random.title">Draw lines at random</button></div>
+      <div class="row"><button id="scatter" class="closes" data-i="draw.scatter" data-i-title="draw.scatter.title">Scatter at random</button></div>
+    </div></div>
+    <a id="projLink" href="https://github.com/luginf/hexacorde" target="_blank" rel="noopener" data-i="link.project" data-i-title="link.project.title">Project</a>
+    <select id="lang" class="right" aria-label="Language"><option value="en">ENG</option><option value="fr">FRA</option></select>
+    <div class="dd"><button class="ddb" data-i="menu.help">Help</button><div class="ddp wide" hidden>
+      <div class="help">
+    <p data-i-html="help.1"></p>
+    <p data-i-html="help.2"></p>
+    <p data-i-html="help.3"></p>
+    <p data-i-html="help.4"></p>
+    <p data-i-html="help.5"></p>
+    <p data-i-html="help.6"></p>
+    <p data-i-html="help.7"></p>
+    <p data-i-html="help.8"></p>
+    <p data-i-html="help.9"></p>
+    <p data-i-html="help.10"></p>
+    <p data-i-html="help.11"></p>
+    <p data-i-html="help.12"></p>
+    <p data-i-html="help.13"></p>
+    <p data-i-html="help.14"></p>
+    <p data-i-html="help.15"></p>
+    <p data-i-html="help.16"></p>
+      </div>
+    </div></div>
+  </nav>
+</header>
+<main><svg id="board" viewBox="0 0 570 570" aria-label="Grid"></svg></main>
+
+<script>
+//@@JS@@
+</script>
+</body>
+</html>

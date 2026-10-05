@@ -186,4 +186,5 @@ Voir `CLAUDE.md` pour le détail des règles de conception, de la structure du c
 
 ## Licence
 
-BSD 3 clauses, voir [LICENSE](LICENSE).
+- La version web (`docs/`) et le cœur C++ (`core/`) : BSD 3 clauses, voir [LICENSE](LICENSE).
+- Le module VCV Rack (`vcv/`) : GPL-3.0-or-later, voir [vcv/LICENSE](vcv/LICENSE) (la licence que VCV recommande pour les plugins Rack). Il est aussi publié dans un dépôt autonome, généré par `make vcv-release`, parce que la VCV Library compile la racine d'un dépôt.

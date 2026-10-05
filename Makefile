@@ -9,6 +9,7 @@
 #   make core-test    compile le cœur C++ et le compare à l'application web (core/test/ref.txt)
 #   make core-ref     régénère core/test/ref.txt depuis docs/index.html (demande google-chrome)
 #   make vcv          compile le module VCV Rack (demande le Rack SDK, voir vcv/README.md)
+#   make vcv-release  exporte le module comme dépôt autonome (pour la VCV Library)
 #   make clean        supprime les fichiers intermédiaires
 
 WEB := docs
@@ -54,4 +55,8 @@ core-ref: $(WEB)/index.html
 vcv: core/tables.hpp
 	$(MAKE) -C vcv
 
-.PHONY: all web check serve clean core-test core-ref vcv
+# dépôt autonome du module pour la VCV Library (voir vcv/release.sh) : make vcv-release [OUT=dossier]
+vcv-release: core/tables.hpp
+	vcv/release.sh $(OUT)
+
+.PHONY: vcv-release all web check serve clean core-test core-ref vcv

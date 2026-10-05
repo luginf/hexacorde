@@ -31,4 +31,12 @@ L'état complet est enregistré dans le patch (au format de setup de l'applicati
 
 Pas de sélection multiple au rectangle, interface et menus en anglais seulement, thème sombre seulement, 16 hexagones au plus en sortie (les suivants jouent mais ne sont pas câblés). Le son interne, les instruments MIDI et l'enregistrement de l'application web n'ont pas d'équivalent : on utilise les modules de Rack.
 
-Licence : BSD 3 clauses pour le code d'Hexacorde. Rack est sous GPLv3 : vérifier les conditions du Rack SDK avant de distribuer un binaire (par exemple dans la VCV Library).
+## Licence et publication
+
+Le module est sous **GPL-3.0-or-later** (`LICENSE`, `plugin.json`), la licence que VCV recommande ; le cœur `../core` reste en BSD 3 clauses (la GPL peut l'inclure). Toutes les sources ont été écrites par le même auteur, ce qui permet cette répartition.
+
+**Publier dans la VCV Library** : elle compile la *racine* d'un dépôt (`plugin.json` et `Makefile` à la racine), alors qu'ici le module est dans `vcv/` et utilise `../core`. `make vcv-release` (depuis la racine du dépôt, `OUT=dossier` pour choisir la destination, par défaut `../hexacorde-vcv`) exporte donc un **dépôt autonome** : le plugin, une copie des quatre en-têtes du cœur dans `core/` (avec sa licence BSD), les deux licences, un README anglais, un `.gitignore`, et un `plugin.json` dont les URL pointent vers ce dépôt (`REPO_URL=...` pour en changer, par défaut `https://github.com/luginf/hexacorde-vcv`). Le dépôt d'origine reste la source de vérité : on ré-exporte après chaque modification de `core/` ou `vcv/`.
+
+Étapes : (1) `make vcv-release` ; (2) dans le dossier exporté : `git init`, commit, créer le dépôt GitHub `luginf/hexacorde-vcv` et pousser ; (3) compléter `authorEmail` si on le souhaite dans `vcv/plugin.json` (laissé vide : il serait public) et ré-exporter ; (4) ouvrir **un seul ticket** dans https://github.com/VCVRack/library/issues, titré exactement `Hexacorde` (le slug, libre dans la Library au 2026-10-05), avec l'URL du dépôt et le **hash du commit** (`git rev-parse HEAD`) ; l'équipe VCV compile pour Windows, Mac et Linux et publie ; (5) pour une mise à jour : augmenter `version` dans `vcv/plugin.json` (et `vcv/CHANGELOG.md`), ré-exporter, pousser, puis commenter le ticket avec la nouvelle version et le nouveau hash.
+
+Non testé : la compilation sous Windows et Mac (la Library s'en charge et peut demander des corrections).

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026, luginf
 // Module VCV Rack "Hexacorde" : le séquenceur oraculaire (cœur C++ de ../../core) dans le rack.
 // Entrées : CLOCK (un pas par impulsion, sinon horloge interne en BPM), RESET, PRIME (poly : le canal i amorce
 // l'hexagone i), ROTATE (poly : le canal i fait tourner l'hexagone i d'un cran).
